@@ -57,15 +57,17 @@ class LocationService : Service() {
     }
 
     private fun acquireWakeLock() {
-        if (wakeLock == null) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "GPXLogger::LocationWakeLock"
-            ).apply {
-                // Acquire with 24-hour timeout as a failsafe; service normally releases on stop
-                acquire(24 * 60 * 60 * 1000L)
-            }
+        // Release any existing wake lock first to prevent leaks if onStartCommand is called multiple times
+        // This is safe to call even if no wake lock exists (releaseWakeLock handles null case)
+        releaseWakeLock()
+        
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "GPXLogger::LocationWakeLock"
+        ).apply {
+            // Acquire with 1-hour timeout as a failsafe; service normally releases on stop
+            acquire(WAKE_LOCK_TIMEOUT_MS)
         }
     }
 
@@ -173,6 +175,7 @@ class LocationService : Service() {
     companion object {
         private const val CHANNEL_ID = "GPXLoggerChannel"
         private const val NOTIFICATION_ID = 1
+        private const val WAKE_LOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour failsafe timeout
         
         const val ACTION_LOCATION_UPDATE = "com.hdclark.gpxlogger.LOCATION_UPDATE"
         const val ACTION_SERVICE_STARTED = "com.hdclark.gpxlogger.SERVICE_STARTED"

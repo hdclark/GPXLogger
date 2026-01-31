@@ -22,4 +22,5 @@
     <string name="battery_optimization_message">For reliable GPS logging, please disable battery optimization for this app. This prevents the system from stopping the GPS service.</string>
     <string name="battery_optimization_disable">Disable</string>
     <string name="battery_optimization_later">Later</string>
+    <string name="battery_settings_not_available">Battery optimization settings are not available on this device</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.hdclark.gpxlogger
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -28,6 +29,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private lateinit var settingsButton: Button
+    private var batteryDialogShownThisSession = false
 
     private val locationUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -105,14 +107,23 @@ class MainActivity : AppCompatActivity() {
                 // Check if user has already dismissed the dialog
                 val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 val dismissed = prefs.getBoolean(KEY_BATTERY_DIALOG_DISMISSED, false)
-                if (!dismissed) {
+                // Prevent showing dialog during config changes or if already shown this session
+                if (!dismissed && !batteryDialogShownThisSession && !isFinishing) {
                     showBatteryOptimizationDialog()
+                }
+            } else {
+                // Battery optimization is disabled; clear any previous dismissal so the
+                // dialog can be shown again if optimization is re-enabled later.
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                if (prefs.getBoolean(KEY_BATTERY_DIALOG_DISMISSED, false)) {
+                    prefs.edit().remove(KEY_BATTERY_DIALOG_DISMISSED).apply()
                 }
             }
         }
     }
 
     private fun showBatteryOptimizationDialog() {
+        batteryDialogShownThisSession = true
         AlertDialog.Builder(this)
             .setTitle(R.string.battery_optimization_title)
             .setMessage(R.string.battery_optimization_message)
@@ -127,13 +138,20 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    @Suppress("DEPRECATION")
     private fun requestBatteryOptimizationExemption() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = Uri.parse("package:$packageName")
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(
+                    this,
+                    R.string.battery_settings_not_available,
+                    Toast.LENGTH_LONG
+                ).show()
             }
-            startActivity(intent)
         }
     }
 
