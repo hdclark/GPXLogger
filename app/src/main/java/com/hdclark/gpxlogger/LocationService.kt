@@ -23,6 +23,7 @@ class LocationService : Service() {
     private var startTime: Long = 0
     private var totalDistance: Float = 0f
     private var lastLocation: Location? = null
+    private var lastNotificationUpdate: Long = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -74,6 +75,7 @@ class LocationService : Service() {
             startTime = System.currentTimeMillis()
             totalDistance = 0f
             lastLocation = null
+            lastNotificationUpdate = 0
             
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
@@ -97,8 +99,12 @@ class LocationService : Service() {
         
         gpxManager.addLocation(location)
         
-        // Update notification with statistics
-        updateNotification()
+        // Update notification with statistics (throttled to once every 5 seconds)
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastNotificationUpdate >= 5000) {
+            updateNotification()
+            lastNotificationUpdate = currentTime
+        }
         
         // Broadcast location update to UI
         val intent = Intent(ACTION_LOCATION_UPDATE).apply {
