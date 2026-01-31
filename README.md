@@ -23,11 +23,8 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 1. **Start Logging**: Tap the "Start Logging" button to begin recording GPS positions
 2. **Stop Logging**: Tap the "Stop Logging" button to stop recording
 3. **Configure Interval**: Access Settings to change the logging frequency (in seconds)
-4. **Configure Storage Location**: Access Settings to change the folder name for GPX files (default: `GPXLogger`). The full storage path is displayed in settings along with accessibility information.
-5. **GPX Files**: Files are automatically saved to the app's external storage directory (`Android/data/com.hdclark.gpxlogger/files/<folder>/`) with timestamp-based filenames (e.g., `20260131-123407.gpx`).
-   - **Android 8.0–9.0 (API 26–28)**: Files are directly accessible via standard file browsers
-   - **Android 10+ (API 29+)**: Due to scoped storage restrictions, access may require using a file manager that can browse app-specific directories
-   - The exact path and accessibility status are shown in the Settings screen
+4. **Configure Storage Location**: Access Settings to change the folder name for GPX files (default: `GPXLogger`). The full storage path is displayed in settings.
+5. **GPX Files**: Files are automatically saved to the public Downloads folder (`Downloads/<folder>/`) with timestamp-based filenames (e.g., `20260131-123407.gpx`). Files are accessible via standard file browsers on all Android versions. The app uses MediaStore API on Android 10+ to ensure compatibility with scoped storage restrictions.
 6. **Battery Optimization**: When prompted, disable battery optimization to ensure the service runs reliably in the background
 7. **View Statistics**: While logging, the app displays duration, distance, location count, and time since the last location update
 
