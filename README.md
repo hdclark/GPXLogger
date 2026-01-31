@@ -8,6 +8,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 - **Configurable Logging Interval**: Default 10 seconds, user-configurable via settings
 - **Automatic GPX Export**: GPS data is continuously written to GPX files
 - **Battery Optimization**: Data is cached for up to 15 minutes before writing to reduce battery usage
+- **Battery Optimization Workarounds**: Uses WakeLock and prompts users to disable battery optimization for reliable background logging
 - **Real-time Updates**: View current location and logging status in the app
 
 ## Requirements
@@ -15,6 +16,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 - Android 8.0 (API 26) or higher
 - Location permissions
 - Notification permissions (Android 13+)
+- Battery optimization exemption (recommended for reliable background logging)
 
 ## Usage
 
@@ -22,6 +24,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 2. **Stop Logging**: Tap the "Stop Logging" button to stop recording
 3. **Configure Interval**: Access Settings to change the logging frequency (in seconds)
 4. **GPX Files**: Files are automatically saved to the app's external files directory
+5. **Battery Optimization**: When prompted, disable battery optimization to ensure the service runs reliably in the background
 
 ## GPX File Format
 
@@ -62,6 +65,8 @@ The app requires the following permissions:
 - `FOREGROUND_SERVICE`: To run background service
 - `FOREGROUND_SERVICE_LOCATION`: For location-based foreground service
 - `POST_NOTIFICATIONS`: To display service notification (Android 13+)
+- `WAKE_LOCK`: To keep CPU active during background logging
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: To request battery optimization exemption
 
 ## License
 

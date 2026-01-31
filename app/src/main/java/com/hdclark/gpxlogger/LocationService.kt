@@ -10,6 +10,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
@@ -20,6 +21,7 @@ class LocationService : Service() {
     private lateinit var locationCallback: LocationCallback
     private lateinit var gpxManager: GpxManager
     private var locationCount = 0
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -40,6 +42,9 @@ class LocationService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         
+        // Acquire wake lock to prevent CPU from sleeping
+        acquireWakeLock()
+        
         startLocationUpdates()
         
         isRunning = true
@@ -49,6 +54,28 @@ class LocationService : Service() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(startIntent)
         
         return START_STICKY
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "GPXLogger::LocationWakeLock"
+            ).apply {
+                // Acquire with 24-hour timeout as a failsafe; service normally releases on stop
+                acquire(24 * 60 * 60 * 1000L)
+            }
+        }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+        wakeLock = null
     }
 
     private fun startLocationUpdates() {
@@ -99,6 +126,9 @@ class LocationService : Service() {
         
         fusedLocationClient.removeLocationUpdates(locationCallback)
         gpxManager.closeTrack()
+        
+        // Release wake lock
+        releaseWakeLock()
         
         isRunning = false
         
