@@ -172,8 +172,17 @@ class MainActivity : AppCompatActivity() {
         } else {
             true
         }
+        
+        // WRITE_EXTERNAL_STORAGE is only needed for API 26-28
+        val storage = if (Build.VERSION.SDK_INT in Build.VERSION_CODES.O..Build.VERSION_CODES.P) {
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
 
-        return fineLocation && notification
+        return fineLocation && notification && storage
     }
 
     private fun requestPermissions() {
@@ -184,6 +193,11 @@ class MainActivity : AppCompatActivity() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        
+        // WRITE_EXTERNAL_STORAGE is only needed for API 26-28
+        if (Build.VERSION.SDK_INT in Build.VERSION_CODES.O..Build.VERSION_CODES.P) {
+            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
 
         ActivityCompat.requestPermissions(

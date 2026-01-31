@@ -99,7 +99,12 @@ class LocationService : Service() {
 
         try {
             // Start new GPX track
-            gpxManager.startNewTrack()
+            val file = gpxManager.startNewTrack()
+            if (file == null) {
+                android.util.Log.e("LocationService", "Failed to create GPX file, stopping service")
+                stopSelf()
+                return
+            }
             locationCount = 0
             startTime = System.currentTimeMillis()
             totalDistance = 0f
@@ -121,38 +126,83 @@ class LocationService : Service() {
     }
 
     private fun handleLocationUpdate(location: Location) {
-        locationCount++
+        try {
+            locationCount++
+
+            // Calculate distance from last location
+            lastLocation?.let { last ->
+                totalDistance += last.distanceTo(location)
+            }
+            lastLocation = location
         
-        // Calculate distance from last location
-        lastLocation?.let { last ->
-            totalDistance += last.distanceTo(location)
+            gpxManager.addLocation(location)
+        
+            // Update notification with statistics (throttled to once every 5 seconds)
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastNotificationUpdate >= NOTIFICATION_UPDATE_INTERVAL_MS) {
+                updateNotification()
+                lastNotificationUpdate = currentTime
+            }
+            
+            // Check if file operations are consistently failing
+            if (gpxManager.hasExceededRetryLimit()) {
+                android.util.Log.e("LocationService", "File operations failed too many times, stopping service")
+                handleFatalError()
+                return
+            }
+            
+            // Broadcast location update to UI
+            val intent = Intent(ACTION_LOCATION_UPDATE).apply {
+                putExtra("latitude", location.latitude)
+                putExtra("longitude", location.longitude)
+                putExtra("count", locationCount)
+                putExtra("fileName", gpxManager.getCurrentFileName())
+            }
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("LocationService", "Error handling location update", e)
+            handleFatalError()
         }
-        lastLocation = location
-        
-        gpxManager.addLocation(location)
-        
-        // Update notification with statistics (throttled to once every 5 seconds)
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastNotificationUpdate >= NOTIFICATION_UPDATE_INTERVAL_MS) {
-            updateNotification()
-            lastNotificationUpdate = currentTime
+    }
+    
+    /**
+     * Handles fatal errors by attempting to save data and stopping the service.
+     * This method performs emergency flush, removes location updates, notifies the UI,
+     * and stops the service.
+     */
+    private fun handleFatalError() {
+        // Attempt emergency flush to save as much data as possible
+        gpxManager.emergencyFlush()
+        // Stop receiving further location updates
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (removeEx: Exception) {
+            android.util.Log.e("LocationService", "Error removing location updates after failure", removeEx)
         }
-        
-        // Broadcast location update to UI
-        val intent = Intent(ACTION_LOCATION_UPDATE).apply {
-            putExtra("latitude", location.latitude)
-            putExtra("longitude", location.longitude)
-            putExtra("count", locationCount)
-            putExtra("fileName", gpxManager.getCurrentFileName())
+        // Notify UI that the service is stopping due to an error
+        val errorIntent = Intent(ACTION_SERVICE_STOPPED).apply {
+            putExtra("stopped_due_to_error", true)
         }
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(errorIntent)
+        stopSelf()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         
-        fusedLocationClient.removeLocationUpdates(locationCallback)
-        gpxManager.closeTrack()
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (e: Exception) {
+            android.util.Log.e("LocationService", "Error removing location updates", e)
+        }
+        
+        try {
+            gpxManager.closeTrack()
+        } catch (e: Exception) {
+            android.util.Log.e("LocationService", "Error closing track", e)
+            // Attempt emergency flush to save as much data as possible
+            gpxManager.emergencyFlush()
+        }
         
         // Release wake lock
         releaseWakeLock()
