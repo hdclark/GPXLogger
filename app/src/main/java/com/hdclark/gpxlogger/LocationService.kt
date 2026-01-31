@@ -82,6 +82,9 @@ class LocationService : Service() {
                 locationCallback,
                 Looper.getMainLooper()
             )
+            
+            // Update notification immediately to show initial state
+            updateNotification()
         } catch (e: SecurityException) {
             // Permission not granted
             stopSelf()
@@ -187,8 +190,8 @@ class LocationService : Service() {
 
     private fun formatDuration(milliseconds: Long): String {
         val seconds = (milliseconds / MILLIS_PER_SECOND) % SECONDS_PER_MINUTE
-        val minutes = (milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE)) % SECONDS_PER_MINUTE
-        val hours = milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE * SECONDS_PER_MINUTE)
+        val minutes = (milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE)) % MINUTES_PER_HOUR
+        val hours = milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR)
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
 
@@ -206,6 +209,7 @@ class LocationService : Service() {
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 5000L
         private const val MILLIS_PER_SECOND = 1000L
         private const val SECONDS_PER_MINUTE = 60
+        private const val MINUTES_PER_HOUR = 60
         private const val METERS_PER_KILOMETER = 1000
         
         const val ACTION_LOCATION_UPDATE = "com.hdclark.gpxlogger.LOCATION_UPDATE"
