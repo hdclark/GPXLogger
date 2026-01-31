@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GPX Logger</string>
+    <string name="start_logging">Start Logging</string>
+    <string name="stop_logging">Stop Logging</string>
+    <string name="settings">Settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="status">Status: </string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_running">Running</string>
+    <string name="last_location">Last Location: </string>
+    <string name="location_count">Locations Logged: </string>
+    <string name="gpx_file">GPX File: </string>
+    <string name="logging_notification_channel">GPS Logging</string>
+    <string name="logging_notification_title">GPS Logger Active</string>
+    <string name="logging_notification_text">Recording your location</string>
+    <string name="permission_required">Location permission is required for GPS logging</string>
+    <string name="permission_denied">Location permission denied</string>
+    <string name="logging_interval_title">Logging Interval</string>
+    <string name="logging_interval_summary">Time between location updates (seconds)</string>
+</resources>
