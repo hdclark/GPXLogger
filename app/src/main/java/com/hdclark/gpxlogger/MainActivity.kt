@@ -319,8 +319,9 @@ class MainActivity : AppCompatActivity() {
         private const val MILLIS_PER_SECOND = 1000L
         
         // Statistics cached at companion object level to survive activity recreation
-        var cachedStartTime: Long = 0
-        var cachedTotalDistance: Float = 0f
-        var cachedLastLocationUpdateTime: Long = 0
+        // @Volatile ensures visibility across threads (UI thread and broadcast receiver)
+        @Volatile var cachedStartTime: Long = 0
+        @Volatile var cachedTotalDistance: Float = 0f
+        @Volatile var cachedLastLocationUpdateTime: Long = 0
     }
 }
