@@ -37,12 +37,14 @@ class SettingsActivity : AppCompatActivity() {
                     val newFolderName = newValue as String
                     
                     // Validate path accessibility without modifying SharedPreferences
-                    if (!gpxManager.isStorageLocationPubliclyAccessibleForFolder(newFolderName)) {
+                    val isAccessible = gpxManager.isStorageLocationPubliclyAccessibleForFolder(newFolderName)
+                    if (!isAccessible) {
                         Toast.makeText(
                             requireContext(),
                             R.string.storage_path_not_accessible,
                             Toast.LENGTH_LONG
                         ).show()
+                        // Return false to prevent the preference from being saved
                         false
                     } else {
                         // Update summary with new path (value will be saved by preference system)
@@ -52,6 +54,7 @@ class SettingsActivity : AppCompatActivity() {
                             newPath,
                             getString(R.string.storage_path_accessible)
                         )
+                        // Return true to allow the preference to be saved
                         true
                     }
                 }

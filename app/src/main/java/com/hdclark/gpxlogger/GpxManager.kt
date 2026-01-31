@@ -245,9 +245,11 @@ class GpxManager(private val context: Context) {
             val isInPublicStorage = canonicalPath.startsWith(publicStorageRoot.canonicalPath)
             
             // Must NOT be within app-private directories (Android/data/package.name/)
-            // Use parentFile traversal for robust path comparison
+            // Use parentFile traversal to get the app's package-specific directory
             val isNotInPrivateDir = if (appPrivateDir != null) {
-                val appDataDir = appPrivateDir.parentFile // Points to Android/data/package.name
+                // appPrivateDir is typically Android/data/package.name/files
+                // parentFile gives us Android/data/package.name
+                val appDataDir = appPrivateDir.parentFile
                 appDataDir == null || !canonicalPath.startsWith(appDataDir.canonicalPath)
             } else {
                 true
