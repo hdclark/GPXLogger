@@ -7,6 +7,21 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!--
+         This app provides continuous GPS/location tracking via a foreground service
+         (LocationService) and must continue to operate reliably even when the device
+         enters Doze mode or is subject to battery optimizations.
+
+         REQUEST_IGNORE_BATTERY_OPTIMIZATIONS is requested so the app can prompt the
+         user to exempt it from battery optimizations, preventing the OS from
+         stopping location updates needed for accurate, real-time tracking.
+
+         This usage is intended to align with Google Play policies for apps that
+         perform ongoing location tracking and have a clear, user-facing benefit.
+         See: https://developer.android.com/training/monitoring-device-state/doze-standby#support_for_other_use_cases
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:allowBackup="true"
