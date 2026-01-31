@@ -3,8 +3,10 @@ package com.hdclark.gpxlogger
 import android.content.Context
 import android.location.Location
 import android.os.Environment
+import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.FileWriter
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -27,20 +29,52 @@ class GpxManager(private val context: Context) {
             val timestamp = fileNameFormat.format(Date())
             val fileName = "$timestamp.gpx"
             
-            // Store in app-specific external Downloads/GPXLogger directory (scoped-storage compatible)
-            val baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-            val gpxDir = File(baseDir, "GPXLogger")
-            if (!gpxDir.exists()) {
-                val created = gpxDir.mkdirs()
-                if (!created && !gpxDir.exists()) {
-                    throw IllegalStateException("Failed to create GPX directory: ${gpxDir.absolutePath}")
-                }
-            }
-            val file = File(gpxDir, fileName)
+            // Get storage path from preferences and sanitize it
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
+            val storagePath = sanitizeFolderName(rawStoragePath)
             
-            // Write GPX header
-            FileWriter(file, false).use { writer ->
-                writer.write("""<?xml version="1.0" encoding="UTF-8"?>
+            // Store in app-specific external Downloads directory (scoped-storage compatible)
+            val baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+            val gpxDir = File(baseDir, storagePath)
+            
+            // Verify the resolved path is within the base directory to prevent directory traversal
+            val isValidPath = try {
+                gpxDir.canonicalPath.startsWith(baseDir.canonicalPath)
+            } catch (e: IOException) {
+                android.util.Log.e("GpxManager", "Error resolving canonical path, using default", e)
+                false
+            }
+            
+            if (!isValidPath) {
+                android.util.Log.e("GpxManager", "Invalid storage path detected, using default")
+                return initializeTrackFile(baseDir, DEFAULT_STORAGE_FOLDER, fileName)
+            }
+            
+            initializeTrackFile(baseDir, storagePath, fileName)
+        } catch (e: Exception) {
+            android.util.Log.e("GpxManager", "Error starting new track", e)
+            null
+        }
+    }
+    
+    /**
+     * Common helper method to initialize a track file with GPX header.
+     * Eliminates code duplication between startNewTrack and fallback path.
+     */
+    private fun initializeTrackFile(baseDir: File, folderName: String, fileName: String): File? {
+        val gpxDir = File(baseDir, folderName)
+        if (!gpxDir.exists()) {
+            val created = gpxDir.mkdirs()
+            if (!created && !gpxDir.exists()) {
+                throw IllegalStateException("Failed to create GPX directory: ${gpxDir.absolutePath}")
+            }
+        }
+        val file = File(gpxDir, fileName)
+        
+        // Write GPX header
+        FileWriter(file, false).use { writer ->
+            writer.write("""<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="GPXLogger"
   xmlns="http://www.topografix.com/GPX/1/1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -49,17 +83,13 @@ class GpxManager(private val context: Context) {
     <name>GPS Track ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}</name>
     <trkseg>
 """)
-            }
-            
-            currentFile = file
-            locationCache.clear()
-            lastFlushTime = System.currentTimeMillis()
-            consecutiveFlushFailures = 0
-            file
-        } catch (e: Exception) {
-            android.util.Log.e("GpxManager", "Error starting new track", e)
-            null
         }
+        
+        currentFile = file
+        locationCache.clear()
+        lastFlushTime = System.currentTimeMillis()
+        consecutiveFlushFailures = 0
+        return file
     }
     
     @Synchronized
@@ -164,5 +194,28 @@ class GpxManager(private val context: Context) {
     @Synchronized
     fun getCurrentFileName(): String {
         return currentFile?.name ?: ""
+    }
+    
+    /**
+     * Sanitizes a folder name by removing directory traversal sequences and 
+     * filesystem-unsafe characters.
+     */
+    private fun sanitizeFolderName(name: String): String {
+        // Remove directory separators and parent directory references
+        var sanitized = name.replace(Regex("[/\\\\]"), "_")
+        sanitized = sanitized.replace("..", "_")
+        
+        // Remove other filesystem-unsafe characters
+        sanitized = sanitized.replace(Regex("[<>:\"|?*]"), "_")
+        
+        // Remove leading/trailing dots and spaces
+        sanitized = sanitized.trim().trim('.')
+        
+        // If result is empty or only underscores, use default
+        return sanitized.takeIf { it.isNotBlank() && it.any { c -> c != '_' } } ?: DEFAULT_STORAGE_FOLDER
+    }
+    
+    companion object {
+        private const val DEFAULT_STORAGE_FOLDER = "GPXLogger"
     }
 }

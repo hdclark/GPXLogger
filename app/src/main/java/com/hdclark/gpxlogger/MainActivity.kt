@@ -10,6 +10,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Button
@@ -26,10 +28,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var locationCountText: TextView
     private lateinit var lastLocationText: TextView
     private lateinit var gpxFileText: TextView
+    private lateinit var durationText: TextView
+    private lateinit var distanceText: TextView
+    private lateinit var lastUpdateText: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private lateinit var settingsButton: Button
     private var batteryDialogShownThisSession = false
+    
+    // Statistics tracking - stored in companion object to survive activity recreation
+    // Handler for periodic UI updates
+    private val handler = Handler(Looper.getMainLooper())
+    private val updateRunnable = object : Runnable {
+        override fun run() {
+            if (LocationService.isRunning) {
+                updateElapsedTime()
+                handler.postDelayed(this, UI_UPDATE_INTERVAL_MS)
+            }
+        }
+    }
 
     private val locationUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -39,10 +56,14 @@ class MainActivity : AppCompatActivity() {
                     val lon = intent.getDoubleExtra("longitude", 0.0)
                     val count = intent.getIntExtra("count", 0)
                     val fileName = intent.getStringExtra("fileName") ?: ""
+                    cachedStartTime = intent.getLongExtra("startTime", 0)
+                    cachedTotalDistance = intent.getFloatExtra("totalDistance", 0f)
+                    cachedLastLocationUpdateTime = intent.getLongExtra("lastLocationUpdateTime", 0)
                     
                     lastLocationText.text = String.format("%.6f, %.6f", lat, lon)
                     locationCountText.text = count.toString()
                     gpxFileText.text = fileName
+                    updateStatisticsDisplay()
                 }
                 LocationService.ACTION_SERVICE_STARTED -> {
                     updateUIForRunningState(true)
@@ -62,6 +83,9 @@ class MainActivity : AppCompatActivity() {
         locationCountText = findViewById(R.id.locationCountText)
         lastLocationText = findViewById(R.id.lastLocationText)
         gpxFileText = findViewById(R.id.gpxFileText)
+        durationText = findViewById(R.id.durationText)
+        distanceText = findViewById(R.id.distanceText)
+        lastUpdateText = findViewById(R.id.lastUpdateText)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
         settingsButton = findViewById(R.id.settingsButton)
@@ -90,9 +114,13 @@ class MainActivity : AppCompatActivity() {
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(locationUpdateReceiver, filter)
 
-        // Check if service is already running
+        // Check if service is already running and restore statistics display
         if (LocationService.isRunning) {
             updateUIForRunningState(true)
+            // Restore statistics display from cached values if available
+            if (cachedStartTime > 0) {
+                updateStatisticsDisplay()
+            }
         }
 
         // Check battery optimization status
@@ -157,6 +185,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        handler.removeCallbacks(updateRunnable)
         LocalBroadcastManager.getInstance(this).unregisterReceiver(locationUpdateReceiver)
     }
 
@@ -241,11 +270,58 @@ class MainActivity : AppCompatActivity() {
         statusText.text = if (isRunning) getString(R.string.status_running) else getString(R.string.status_stopped)
         startButton.isEnabled = !isRunning
         stopButton.isEnabled = isRunning
+        
+        if (isRunning) {
+            // Start periodic updates
+            handler.post(updateRunnable)
+        } else {
+            // Stop periodic updates and reset statistics display
+            handler.removeCallbacks(updateRunnable)
+            resetStatisticsDisplay()
+        }
     }
-
+    
+    private fun updateStatisticsDisplay() {
+        // Update duration
+        if (cachedStartTime > 0) {
+            val durationMs = System.currentTimeMillis() - cachedStartTime
+            durationText.text = FormatUtils.formatDuration(durationMs)
+        }
+        
+        // Update distance
+        distanceText.text = FormatUtils.formatDistance(cachedTotalDistance)
+        
+        // Update elapsed time since last update
+        updateElapsedTime()
+    }
+    
+    private fun updateElapsedTime() {
+        if (cachedLastLocationUpdateTime > 0) {
+            val elapsedSeconds = ((System.currentTimeMillis() - cachedLastLocationUpdateTime) / MILLIS_PER_SECOND).toInt()
+            lastUpdateText.text = getString(R.string.seconds_ago, elapsedSeconds)
+        }
+    }
+    
+    private fun resetStatisticsDisplay() {
+        durationText.text = "-"
+        distanceText.text = "-"
+        lastUpdateText.text = "-"
+        cachedStartTime = 0
+        cachedTotalDistance = 0f
+        cachedLastLocationUpdateTime = 0
+    }
+    
     companion object {
         private const val PERMISSION_REQUEST_CODE = 1001
         private const val PREFS_NAME = "GPXLoggerPrefs"
         private const val KEY_BATTERY_DIALOG_DISMISSED = "battery_dialog_dismissed"
+        private const val UI_UPDATE_INTERVAL_MS = 1000L
+        private const val MILLIS_PER_SECOND = 1000L
+        
+        // Statistics cached at companion object level to survive activity recreation
+        // @Volatile ensures visibility across threads (UI thread and broadcast receiver)
+        @Volatile var cachedStartTime: Long = 0
+        @Volatile var cachedTotalDistance: Float = 0f
+        @Volatile var cachedLastLocationUpdateTime: Long = 0
     }
 }
