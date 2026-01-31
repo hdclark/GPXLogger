@@ -259,8 +259,8 @@ class LocationService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val duration = formatDuration(System.currentTimeMillis() - startTime)
-        val distance = formatDistance(totalDistance)
+        val duration = FormatUtils.formatDuration(System.currentTimeMillis() - startTime)
+        val distance = FormatUtils.formatDistance(totalDistance)
         val statsText = "$duration • $distance • $locationCount points"
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -275,29 +275,10 @@ class LocationService : Service() {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun formatDuration(milliseconds: Long): String {
-        val seconds = (milliseconds / MILLIS_PER_SECOND) % SECONDS_PER_MINUTE
-        val minutes = (milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE)) % MINUTES_PER_HOUR
-        val hours = milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR)
-        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
-    }
-
-    private fun formatDistance(meters: Float): String {
-        return if (meters >= METERS_PER_KILOMETER) {
-            String.format("%.2f km", meters / METERS_PER_KILOMETER)
-        } else {
-            String.format("%.0f m", meters)
-        }
-    }
-
     companion object {
         private const val CHANNEL_ID = "GPXLoggerChannel"
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 5000L
-        private const val MILLIS_PER_SECOND = 1000L
-        private const val SECONDS_PER_MINUTE = 60
-        private const val MINUTES_PER_HOUR = 60
-        private const val METERS_PER_KILOMETER = 1000
         private const val WAKE_LOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour failsafe timeout
         
         const val ACTION_LOCATION_UPDATE = "com.hdclark.gpxlogger.LOCATION_UPDATE"

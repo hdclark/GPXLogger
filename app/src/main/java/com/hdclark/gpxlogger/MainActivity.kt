@@ -36,11 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settingsButton: Button
     private var batteryDialogShownThisSession = false
     
-    // Statistics tracking
-    private var startTime: Long = 0
-    private var totalDistance: Float = 0f
-    private var lastLocationUpdateTime: Long = 0
-    
+    // Statistics tracking - stored in companion object to survive activity recreation
     // Handler for periodic UI updates
     private val handler = Handler(Looper.getMainLooper())
     private val updateRunnable = object : Runnable {
@@ -60,9 +56,9 @@ class MainActivity : AppCompatActivity() {
                     val lon = intent.getDoubleExtra("longitude", 0.0)
                     val count = intent.getIntExtra("count", 0)
                     val fileName = intent.getStringExtra("fileName") ?: ""
-                    startTime = intent.getLongExtra("startTime", 0)
-                    totalDistance = intent.getFloatExtra("totalDistance", 0f)
-                    lastLocationUpdateTime = intent.getLongExtra("lastLocationUpdateTime", 0)
+                    cachedStartTime = intent.getLongExtra("startTime", 0)
+                    cachedTotalDistance = intent.getFloatExtra("totalDistance", 0f)
+                    cachedLastLocationUpdateTime = intent.getLongExtra("lastLocationUpdateTime", 0)
                     
                     lastLocationText.text = String.format("%.6f, %.6f", lat, lon)
                     locationCountText.text = count.toString()
@@ -118,9 +114,13 @@ class MainActivity : AppCompatActivity() {
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(locationUpdateReceiver, filter)
 
-        // Check if service is already running
+        // Check if service is already running and restore statistics display
         if (LocationService.isRunning) {
             updateUIForRunningState(true)
+            // Restore statistics display from cached values if available
+            if (cachedStartTime > 0) {
+                updateStatisticsDisplay()
+            }
         }
 
         // Check battery optimization status
@@ -283,21 +283,21 @@ class MainActivity : AppCompatActivity() {
     
     private fun updateStatisticsDisplay() {
         // Update duration
-        if (startTime > 0) {
-            val durationMs = System.currentTimeMillis() - startTime
-            durationText.text = formatDuration(durationMs)
+        if (cachedStartTime > 0) {
+            val durationMs = System.currentTimeMillis() - cachedStartTime
+            durationText.text = FormatUtils.formatDuration(durationMs)
         }
         
         // Update distance
-        distanceText.text = formatDistance(totalDistance)
+        distanceText.text = FormatUtils.formatDistance(cachedTotalDistance)
         
         // Update elapsed time since last update
         updateElapsedTime()
     }
     
     private fun updateElapsedTime() {
-        if (lastLocationUpdateTime > 0) {
-            val elapsedSeconds = (System.currentTimeMillis() - lastLocationUpdateTime) / MILLIS_PER_SECOND
+        if (cachedLastLocationUpdateTime > 0) {
+            val elapsedSeconds = ((System.currentTimeMillis() - cachedLastLocationUpdateTime) / MILLIS_PER_SECOND).toInt()
             lastUpdateText.text = getString(R.string.seconds_ago, elapsedSeconds)
         }
     }
@@ -306,34 +306,21 @@ class MainActivity : AppCompatActivity() {
         durationText.text = "-"
         distanceText.text = "-"
         lastUpdateText.text = "-"
-        startTime = 0
-        totalDistance = 0f
-        lastLocationUpdateTime = 0
+        cachedStartTime = 0
+        cachedTotalDistance = 0f
+        cachedLastLocationUpdateTime = 0
     }
     
-    private fun formatDuration(milliseconds: Long): String {
-        val seconds = (milliseconds / MILLIS_PER_SECOND) % SECONDS_PER_MINUTE
-        val minutes = (milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE)) % MINUTES_PER_HOUR
-        val hours = milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR)
-        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
-    }
-
-    private fun formatDistance(meters: Float): String {
-        return if (meters >= METERS_PER_KILOMETER) {
-            String.format("%.2f km", meters / METERS_PER_KILOMETER)
-        } else {
-            String.format("%.0f m", meters)
-        }
-    }
-
     companion object {
         private const val PERMISSION_REQUEST_CODE = 1001
         private const val PREFS_NAME = "GPXLoggerPrefs"
         private const val KEY_BATTERY_DIALOG_DISMISSED = "battery_dialog_dismissed"
         private const val UI_UPDATE_INTERVAL_MS = 1000L
         private const val MILLIS_PER_SECOND = 1000L
-        private const val SECONDS_PER_MINUTE = 60
-        private const val MINUTES_PER_HOUR = 60
-        private const val METERS_PER_KILOMETER = 1000
+        
+        // Statistics cached at companion object level to survive activity recreation
+        var cachedStartTime: Long = 0
+        var cachedTotalDistance: Float = 0f
+        var cachedLastLocationUpdateTime: Long = 0
     }
 }
