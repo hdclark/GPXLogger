@@ -17,7 +17,6 @@
 
     <!-- Sun rays -->
     <path
-        android:fillColor="#FFE44D"
         android:pathData="M80,14 L80,18 M80,38 L80,42 M66,28 L70,28 M90,28 L94,28"
         android:strokeWidth="2"
         android:strokeColor="#FFE44D" />
