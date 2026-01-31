@@ -1,7 +1,9 @@
 package com.hdclark.gpxlogger
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceFragmentCompat
 
 class SettingsActivity : AppCompatActivity() {
@@ -19,8 +21,52 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     class SettingsFragment : PreferenceFragmentCompat() {
+        private lateinit var gpxManager: GpxManager
+        
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.preferences, rootKey)
+            
+            gpxManager = GpxManager(requireContext())
+            
+            // Set up storage path preference to show full path
+            val storagePathPref = findPreference<EditTextPreference>("storage_path")
+            storagePathPref?.let { pref ->
+                updateStoragePathSummary(pref)
+                
+                pref.setOnPreferenceChangeListener { _, newValue ->
+                    val newFolderName = newValue as String
+                    
+                    // Validate path accessibility without modifying SharedPreferences
+                    if (!gpxManager.isStorageLocationPubliclyAccessibleForFolder(newFolderName)) {
+                        Toast.makeText(
+                            requireContext(),
+                            R.string.storage_path_not_accessible,
+                            Toast.LENGTH_LONG
+                        ).show()
+                        false
+                    } else {
+                        // Update summary with new path (value will be saved by preference system)
+                        val newPath = gpxManager.getStorageDirectoryForFolder(newFolderName).absolutePath
+                        pref.summary = getString(
+                            R.string.storage_path_full_summary,
+                            newPath,
+                            getString(R.string.storage_path_accessible)
+                        )
+                        true
+                    }
+                }
+            }
+        }
+        
+        private fun updateStoragePathSummary(pref: EditTextPreference) {
+            val fullPath = gpxManager.getStorageDirectory().absolutePath
+            val isAccessible = gpxManager.isStorageLocationPubliclyAccessible()
+            val accessibilityStatus = if (isAccessible) {
+                getString(R.string.storage_path_accessible)
+            } else {
+                getString(R.string.storage_path_not_accessible)
+            }
+            pref.summary = getString(R.string.storage_path_full_summary, fullPath, accessibilityStatus)
         }
     }
 }

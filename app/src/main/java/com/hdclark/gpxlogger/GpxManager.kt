@@ -34,8 +34,9 @@ class GpxManager(private val context: Context) {
             val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
             val storagePath = sanitizeFolderName(rawStoragePath)
             
-            // Store in app-specific external Downloads directory (scoped-storage compatible)
-            val baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+            // Use the public Downloads directory as the parent location for GPX files
+            // This makes files accessible via standard file browsers
+            val baseDir = getPublicDownloadsDirectory()
             val gpxDir = File(baseDir, storagePath)
             
             // Verify the resolved path is within the base directory to prevent directory traversal
@@ -49,6 +50,13 @@ class GpxManager(private val context: Context) {
             if (!isValidPath) {
                 android.util.Log.e("GpxManager", "Invalid storage path detected, using default")
                 return initializeTrackFile(baseDir, DEFAULT_STORAGE_FOLDER, fileName)
+            }
+            
+            // Validate that the path is publicly accessible
+            if (!isPubliclyAccessible(gpxDir)) {
+                android.util.Log.w("GpxManager", "Storage path is not publicly accessible, using default public Downloads folder")
+                val publicDir = getPublicDownloadsDirectory()
+                return initializeTrackFile(publicDir, DEFAULT_STORAGE_FOLDER, fileName)
             }
             
             initializeTrackFile(baseDir, storagePath, fileName)
@@ -213,6 +221,82 @@ class GpxManager(private val context: Context) {
         
         // If result is empty or only underscores, use default
         return sanitized.takeIf { it.isNotBlank() && it.any { c -> c != '_' } } ?: DEFAULT_STORAGE_FOLDER
+    }
+    
+    /**
+     * Gets the public Downloads directory for storing GPX files.
+     * This makes files accessible via standard file browsers.
+     */
+    private fun getPublicDownloadsDirectory(): File {
+        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    }
+    
+    /**
+     * Checks if a directory path is publicly accessible (can be read by external apps/file browsers).
+     * A path is considered publicly accessible if it's within the public external storage area.
+     */
+    private fun isPubliclyAccessible(directory: File): Boolean {
+        return try {
+            val publicStorageRoot = Environment.getExternalStorageDirectory()
+            val appPrivateDir = context.getExternalFilesDir(null)
+            val canonicalPath = directory.canonicalPath
+            
+            // Must be within public external storage
+            val isInPublicStorage = canonicalPath.startsWith(publicStorageRoot.canonicalPath)
+            
+            // Must NOT be within app-private directories (Android/data/package.name/)
+            // Use parentFile traversal for robust path comparison
+            val isNotInPrivateDir = if (appPrivateDir != null) {
+                val appDataDir = appPrivateDir.parentFile // Points to Android/data/package.name
+                appDataDir == null || !canonicalPath.startsWith(appDataDir.canonicalPath)
+            } else {
+                true
+            }
+            
+            isInPublicStorage && isNotInPrivateDir
+        } catch (e: IOException) {
+            android.util.Log.e("GpxManager", "Error checking path accessibility", e)
+            false
+        }
+    }
+    
+    /**
+     * Returns the full path where GPX files will be stored.
+     * This can be used to display the path in settings.
+     */
+    fun getStorageDirectory(): File {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
+        val storagePath = sanitizeFolderName(rawStoragePath)
+        
+        val baseDir = getPublicDownloadsDirectory()
+        return File(baseDir, storagePath)
+    }
+    
+    /**
+     * Returns the full path where GPX files would be stored for a given folder name.
+     * This can be used to preview the path before saving settings.
+     */
+    fun getStorageDirectoryForFolder(folderName: String): File {
+        val storagePath = sanitizeFolderName(folderName.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER)
+        val baseDir = getPublicDownloadsDirectory()
+        return File(baseDir, storagePath)
+    }
+    
+    /**
+     * Validates if the current storage configuration is publicly accessible.
+     * Returns true if GPX files will be accessible by external file browsers.
+     */
+    fun isStorageLocationPubliclyAccessible(): Boolean {
+        return isPubliclyAccessible(getStorageDirectory())
+    }
+    
+    /**
+     * Validates if a proposed folder name would result in a publicly accessible path.
+     * This allows validation without modifying SharedPreferences.
+     */
+    fun isStorageLocationPubliclyAccessibleForFolder(folderName: String): Boolean {
+        return isPubliclyAccessible(getStorageDirectoryForFolder(folderName))
     }
     
     companion object {
