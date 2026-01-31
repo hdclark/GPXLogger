@@ -297,7 +297,7 @@ class MainActivity : AppCompatActivity() {
     
     private fun updateElapsedTime() {
         if (lastLocationUpdateTime > 0) {
-            val elapsedSeconds = ((System.currentTimeMillis() - lastLocationUpdateTime) / MILLIS_PER_SECOND).toInt()
+            val elapsedSeconds = (System.currentTimeMillis() - lastLocationUpdateTime) / MILLIS_PER_SECOND
             lastUpdateText.text = getString(R.string.seconds_ago, elapsedSeconds)
         }
     }
