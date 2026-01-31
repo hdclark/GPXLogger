@@ -87,7 +87,7 @@ The app requires the following permissions:
 - `FOREGROUND_SERVICE`: To run background service
 - `FOREGROUND_SERVICE_LOCATION`: For location-based foreground service
 - `POST_NOTIFICATIONS`: To display service notification (Android 13+)
-- `WRITE_EXTERNAL_STORAGE`: For writing GPX files (Android 6.0-9.0 only)
+- `WRITE_EXTERNAL_STORAGE`: For writing GPX files (Android 8.0-9.0 (API 26-28) only)
 - `WAKE_LOCK`: To keep CPU active during background logging
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: To request battery optimization exemption
 

@@ -85,6 +85,7 @@ class GpxManager(private val context: Context) {
         return flushCacheInternal(forceFlush = false)
     }
     
+    @Synchronized
     private fun flushCacheInternal(forceFlush: Boolean): Boolean {
         val file = currentFile ?: return false
         if (locationCache.isEmpty()) return true
@@ -155,10 +156,12 @@ class GpxManager(private val context: Context) {
      * Returns true if flush operations have failed too many times and the manager
      * should stop attempting to write.
      */
+    @Synchronized
     fun hasExceededRetryLimit(): Boolean {
         return consecutiveFlushFailures >= maxFlushRetries
     }
     
+    @Synchronized
     fun getCurrentFileName(): String {
         return currentFile?.name ?: ""
     }

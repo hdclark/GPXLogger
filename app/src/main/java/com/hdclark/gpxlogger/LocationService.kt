@@ -147,19 +147,7 @@ class LocationService : Service() {
             // Check if file operations are consistently failing
             if (gpxManager.hasExceededRetryLimit()) {
                 android.util.Log.e("LocationService", "File operations failed too many times, stopping service")
-                gpxManager.emergencyFlush()
-                // Stop receiving further location updates
-                try {
-                    fusedLocationClient.removeLocationUpdates(locationCallback)
-                } catch (removeEx: Exception) {
-                    android.util.Log.e("LocationService", "Error removing location updates after failure", removeEx)
-                }
-                // Notify UI that the service is stopping due to an error
-                val errorIntent = Intent(ACTION_SERVICE_STOPPED).apply {
-                    putExtra("stopped_due_to_error", true)
-                }
-                LocalBroadcastManager.getInstance(this).sendBroadcast(errorIntent)
-                stopSelf()
+                handleFatalError()
                 return
             }
             
@@ -173,21 +161,30 @@ class LocationService : Service() {
             LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
         } catch (e: Exception) {
             android.util.Log.e("LocationService", "Error handling location update", e)
-            // Attempt emergency flush to save as much data as possible
-            gpxManager.emergencyFlush()
-            // Stop receiving further location updates
-            try {
-                fusedLocationClient.removeLocationUpdates(locationCallback)
-            } catch (removeEx: Exception) {
-                android.util.Log.e("LocationService", "Error removing location updates after failure", removeEx)
-            }
-            // Notify UI that the service is stopping due to an error
-            val errorIntent = Intent(ACTION_SERVICE_STOPPED).apply {
-                putExtra("stopped_due_to_error", true)
-            }
-            LocalBroadcastManager.getInstance(this).sendBroadcast(errorIntent)
-            stopSelf()
+            handleFatalError()
         }
+    }
+    
+    /**
+     * Handles fatal errors by attempting to save data and stopping the service.
+     * This method performs emergency flush, removes location updates, notifies the UI,
+     * and stops the service.
+     */
+    private fun handleFatalError() {
+        // Attempt emergency flush to save as much data as possible
+        gpxManager.emergencyFlush()
+        // Stop receiving further location updates
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (removeEx: Exception) {
+            android.util.Log.e("LocationService", "Error removing location updates after failure", removeEx)
+        }
+        // Notify UI that the service is stopping due to an error
+        val errorIntent = Intent(ACTION_SERVICE_STOPPED).apply {
+            putExtra("stopped_due_to_error", true)
+        }
+        LocalBroadcastManager.getInstance(this).sendBroadcast(errorIntent)
+        stopSelf()
     }
 
     override fun onDestroy() {
