@@ -1,6 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#2196F3"/>
-    <size android:width="48dp" android:height="48dp"/>
-</shape>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Sky background -->
+    <path
+        android:fillColor="#87CEEB"
+        android:pathData="M0,0h48v48h-48z" />
+
+    <!-- Sun -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M36,12 a4,4 0 1,1 0.01,0" />
+
+    <!-- Mountain -->
+    <path
+        android:fillColor="#4A5568"
+        android:pathData="M8,34 L24,13 L40,34 Z" />
+
+    <!-- Snow cap -->
+    <path
+        android:fillColor="#E8E8E8"
+        android:pathData="M24,13 L21,18 L24,16 L27,18 Z" />
+
+    <!-- Forest dark -->
+    <path
+        android:fillColor="#1B5E20"
+        android:pathData="M0,34 L0,26 L6,21 L12,26 L18,20 L24,26 L30,22 L36,26 L42,21 L48,26 L48,34 Z" />
+
+    <!-- Forest medium -->
+    <path
+        android:fillColor="#2E7D32"
+        android:pathData="M0,34 L0,28 L5,24 L10,29 L15,23 L20,29 L25,25 L30,29 L35,24 L40,29 L45,24 L48,27 L48,34 Z" />
+
+    <!-- Forest light -->
+    <path
+        android:fillColor="#388E3C"
+        android:pathData="M0,34 L0,31 L4,27 L8,32 L12,28 L16,32 L20,29 L24,33 L28,30 L32,33 L36,30 L40,34 L44,31 L48,34 Z" />
+
+    <!-- Ground -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M0,34 L48,34 L48,44 L0,44 Z" />
+
+    <!-- Road -->
+    <path
+        android:fillColor="#616161"
+        android:pathData="M16,44 L22,31 L26,31 L32,44 Z" />
+
+    <!-- Road edges -->
+    <path
+        android:fillColor="#424242"
+        android:pathData="M16,44 L22,31 L22.5,31 L17,44 Z" />
+    <path
+        android:fillColor="#424242"
+        android:pathData="M31,44 L25.5,31 L26,31 L32,44 Z" />
+
+    <!-- Road center lines -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M23.5,42 L24,39 L24.3,39 L23.8,42 Z" />
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M24,37 L24.2,34 L24.5,34 L24.3,37 Z" />
+
+</vector>
