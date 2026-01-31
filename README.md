@@ -36,7 +36,29 @@ The app generates standard GPX 1.1 files with the following information:
 
 ## Building
 
-The project uses Gradle for building:
+### Local Build with Docker
+
+For a reproducible build environment that matches CI, use the included build script:
+
+```bash
+./build.sh              # Build debug APK (default)
+./build.sh assembleRelease  # Build release APK
+./build.sh clean        # Clean build artifacts
+```
+
+**Requirements:**
+- Docker installed and running
+- Up-to-date Linux distribution
+
+The build script:
+- Checks for Docker availability
+- Builds the Docker image from the included `Dockerfile`
+- Runs the Gradle build inside the container
+- Reports the APK output location
+
+### Direct Gradle Build
+
+If you have the Android SDK installed locally:
 
 ```bash
 ./gradlew assembleDebug
