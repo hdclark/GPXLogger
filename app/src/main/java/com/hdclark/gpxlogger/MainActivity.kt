@@ -1,16 +1,21 @@
 package com.hdclark.gpxlogger
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -24,6 +29,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private lateinit var settingsButton: Button
+    private var batteryDialogShownThisSession = false
 
     private val locationUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -87,6 +93,65 @@ class MainActivity : AppCompatActivity() {
         // Check if service is already running
         if (LocationService.isRunning) {
             updateUIForRunningState(true)
+        }
+
+        // Check battery optimization status
+        checkBatteryOptimization()
+    }
+
+    private fun checkBatteryOptimization() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val packageName = packageName
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                // Check if user has already dismissed the dialog
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val dismissed = prefs.getBoolean(KEY_BATTERY_DIALOG_DISMISSED, false)
+                // Prevent showing dialog during config changes or if already shown this session
+                if (!dismissed && !batteryDialogShownThisSession && !isFinishing) {
+                    showBatteryOptimizationDialog()
+                }
+            } else {
+                // Battery optimization is disabled; clear any previous dismissal so the
+                // dialog can be shown again if optimization is re-enabled later.
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                if (prefs.getBoolean(KEY_BATTERY_DIALOG_DISMISSED, false)) {
+                    prefs.edit().remove(KEY_BATTERY_DIALOG_DISMISSED).apply()
+                }
+            }
+        }
+    }
+
+    private fun showBatteryOptimizationDialog() {
+        batteryDialogShownThisSession = true
+        AlertDialog.Builder(this)
+            .setTitle(R.string.battery_optimization_title)
+            .setMessage(R.string.battery_optimization_message)
+            .setPositiveButton(R.string.battery_optimization_disable) { _, _ ->
+                requestBatteryOptimizationExemption()
+            }
+            .setNegativeButton(R.string.battery_optimization_later) { _, _ ->
+                // Remember that user dismissed the dialog
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.edit().putBoolean(KEY_BATTERY_DIALOG_DISMISSED, true).apply()
+            }
+            .show()
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(
+                    this,
+                    R.string.battery_settings_not_available,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -166,5 +231,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 1001
+        private const val PREFS_NAME = "GPXLoggerPrefs"
+        private const val KEY_BATTERY_DIALOG_DISMISSED = "battery_dialog_dismissed"
     }
 }

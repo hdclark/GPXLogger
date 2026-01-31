@@ -10,6 +10,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
@@ -24,6 +25,7 @@ class LocationService : Service() {
     private var totalDistance: Float = 0f
     private var lastLocation: Location? = null
     private var lastNotificationUpdate: Long = 0
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -44,6 +46,9 @@ class LocationService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         
+        // Acquire wake lock to prevent CPU from sleeping
+        acquireWakeLock()
+        
         startLocationUpdates()
         
         isRunning = true
@@ -53,6 +58,30 @@ class LocationService : Service() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(startIntent)
         
         return START_STICKY
+    }
+
+    private fun acquireWakeLock() {
+        // Release any existing wake lock first to prevent leaks if onStartCommand is called multiple times
+        // This is safe to call even if no wake lock exists (releaseWakeLock handles null case)
+        releaseWakeLock()
+        
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "GPXLogger::LocationWakeLock"
+        ).apply {
+            // Acquire with 1-hour timeout as a failsafe; service normally releases on stop
+            acquire(WAKE_LOCK_TIMEOUT_MS)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+        wakeLock = null
     }
 
     private fun startLocationUpdates() {
@@ -124,6 +153,9 @@ class LocationService : Service() {
         
         fusedLocationClient.removeLocationUpdates(locationCallback)
         gpxManager.closeTrack()
+        
+        // Release wake lock
+        releaseWakeLock()
         
         isRunning = false
         
@@ -211,6 +243,7 @@ class LocationService : Service() {
         private const val SECONDS_PER_MINUTE = 60
         private const val MINUTES_PER_HOUR = 60
         private const val METERS_PER_KILOMETER = 1000
+        private const val WAKE_LOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour failsafe timeout
         
         const val ACTION_LOCATION_UPDATE = "com.hdclark.gpxlogger.LOCATION_UPDATE"
         const val ACTION_SERVICE_STARTED = "com.hdclark.gpxlogger.SERVICE_STARTED"
