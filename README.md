@@ -21,7 +21,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 1. **Start Logging**: Tap the "Start Logging" button to begin recording GPS positions
 2. **Stop Logging**: Tap the "Stop Logging" button to stop recording
 3. **Configure Interval**: Access Settings to change the logging frequency (in seconds)
-4. **GPX Files**: Files are automatically saved to the app's external files directory
+4. **GPX Files**: Files are automatically saved to `Downloads/GPXLogger/` with timestamp-based filenames (e.g., `20260131-123407.gpx`)
 
 ## GPX File Format
 

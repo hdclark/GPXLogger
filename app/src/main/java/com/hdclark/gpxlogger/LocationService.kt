@@ -81,24 +81,36 @@ class LocationService : Service() {
     }
 
     private fun handleLocationUpdate(location: Location) {
-        locationCount++
-        gpxManager.addLocation(location)
-        
-        // Broadcast location update to UI
-        val intent = Intent(ACTION_LOCATION_UPDATE).apply {
-            putExtra("latitude", location.latitude)
-            putExtra("longitude", location.longitude)
-            putExtra("count", locationCount)
-            putExtra("fileName", gpxManager.getCurrentFileName())
+        try {
+            locationCount++
+            gpxManager.addLocation(location)
+            
+            // Broadcast location update to UI
+            val intent = Intent(ACTION_LOCATION_UPDATE).apply {
+                putExtra("latitude", location.latitude)
+                putExtra("longitude", location.longitude)
+                putExtra("count", locationCount)
+                putExtra("fileName", gpxManager.getCurrentFileName())
+            }
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("LocationService", "Error handling location update", e)
+            // Attempt emergency flush to save as much data as possible
+            gpxManager.emergencyFlush()
         }
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         
-        fusedLocationClient.removeLocationUpdates(locationCallback)
-        gpxManager.closeTrack()
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+            gpxManager.closeTrack()
+        } catch (e: Exception) {
+            android.util.Log.e("LocationService", "Error during service destruction", e)
+            // Attempt emergency flush to save as much data as possible
+            gpxManager.emergencyFlush()
+        }
         
         isRunning = false
         

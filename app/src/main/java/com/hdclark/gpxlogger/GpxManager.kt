@@ -2,6 +2,7 @@ package com.hdclark.gpxlogger
 
 import android.content.Context
 import android.location.Location
+import android.os.Environment
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -17,9 +18,16 @@ class GpxManager(private val context: Context) {
     }
     
     fun startNewTrack(): File {
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val fileName = "gpx_track_$timestamp.gpx"
-        val file = File(context.getExternalFilesDir(null), fileName)
+        val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val fileName = "$timestamp.gpx"
+        
+        // Store in Downloads/GPXLogger directory which is accessible via standard file browsers
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val gpxDir = File(downloadsDir, "GPXLogger")
+        if (!gpxDir.exists()) {
+            gpxDir.mkdirs()
+        }
+        val file = File(gpxDir, fileName)
         
         // Write GPX header
         FileWriter(file, false).use { writer ->
@@ -56,19 +64,24 @@ class GpxManager(private val context: Context) {
         val file = currentFile ?: return
         if (locationCache.isEmpty()) return
         
-        FileWriter(file, true).use { writer ->
-            for (location in locationCache) {
-                val timestamp = dateFormat.format(Date(location.time))
-                writer.write("""      <trkpt lat="${location.latitude}" lon="${location.longitude}">
+        try {
+            FileWriter(file, true).use { writer ->
+                for (location in locationCache) {
+                    val timestamp = dateFormat.format(Date(location.time))
+                    writer.write("""      <trkpt lat="${location.latitude}" lon="${location.longitude}">
         <ele>${location.altitude}</ele>
         <time>$timestamp</time>
       </trkpt>
 """)
+                }
             }
+            
+            locationCache.clear()
+            lastFlushTime = System.currentTimeMillis()
+        } catch (e: Exception) {
+            // Log but don't clear cache if write fails, allowing retry
+            android.util.Log.e("GpxManager", "Error flushing cache to file", e)
         }
-        
-        locationCache.clear()
-        lastFlushTime = System.currentTimeMillis()
     }
     
     fun closeTrack() {
@@ -77,12 +90,53 @@ class GpxManager(private val context: Context) {
         
         val file = currentFile ?: return
         
-        // Write GPX footer
-        FileWriter(file, true).use { writer ->
-            writer.write("""    </trkseg>
+        try {
+            // Write GPX footer
+            FileWriter(file, true).use { writer ->
+                writer.write("""    </trkseg>
   </trk>
 </gpx>
 """)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GpxManager", "Error writing GPX footer", e)
+        }
+        
+        currentFile = null
+    }
+    
+    /**
+     * Emergency flush for error conditions. Attempts to flush all cached data
+     * and close the file even if the information is incomplete.
+     */
+    fun emergencyFlush() {
+        val file = currentFile ?: return
+        
+        try {
+            // First, try to flush any cached locations
+            if (locationCache.isNotEmpty()) {
+                FileWriter(file, true).use { writer ->
+                    for (location in locationCache) {
+                        val timestamp = dateFormat.format(Date(location.time))
+                        writer.write("""      <trkpt lat="${location.latitude}" lon="${location.longitude}">
+        <ele>${location.altitude}</ele>
+        <time>$timestamp</time>
+      </trkpt>
+""")
+                    }
+                }
+                locationCache.clear()
+            }
+            
+            // Then write the GPX footer to make the file valid
+            FileWriter(file, true).use { writer ->
+                writer.write("""    </trkseg>
+  </trk>
+</gpx>
+""")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GpxManager", "Error during emergency flush", e)
         }
         
         currentFile = null
