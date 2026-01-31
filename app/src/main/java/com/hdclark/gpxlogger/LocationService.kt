@@ -21,6 +21,10 @@ class LocationService : Service() {
     private lateinit var locationCallback: LocationCallback
     private lateinit var gpxManager: GpxManager
     private var locationCount = 0
+    private var startTime: Long = 0
+    private var totalDistance: Float = 0f
+    private var lastLocation: Location? = null
+    private var lastNotificationUpdate: Long = 0
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
@@ -97,12 +101,19 @@ class LocationService : Service() {
             // Start new GPX track
             gpxManager.startNewTrack()
             locationCount = 0
+            startTime = System.currentTimeMillis()
+            totalDistance = 0f
+            lastLocation = null
+            lastNotificationUpdate = 0
             
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
                 locationCallback,
                 Looper.getMainLooper()
             )
+            
+            // Update notification immediately to show initial state
+            updateNotification()
         } catch (e: SecurityException) {
             // Permission not granted
             stopSelf()
@@ -111,7 +122,21 @@ class LocationService : Service() {
 
     private fun handleLocationUpdate(location: Location) {
         locationCount++
+        
+        // Calculate distance from last location
+        lastLocation?.let { last ->
+            totalDistance += last.distanceTo(location)
+        }
+        lastLocation = location
+        
         gpxManager.addLocation(location)
+        
+        // Update notification with statistics (throttled to once every 5 seconds)
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastNotificationUpdate >= NOTIFICATION_UPDATE_INTERVAL_MS) {
+            updateNotification()
+            lastNotificationUpdate = currentTime
+        }
         
         // Broadcast location update to UI
         val intent = Intent(ACTION_LOCATION_UPDATE).apply {
@@ -172,9 +197,52 @@ class LocationService : Service() {
             .build()
     }
 
+    private fun updateNotification() {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val duration = formatDuration(System.currentTimeMillis() - startTime)
+        val distance = formatDistance(totalDistance)
+        val statsText = "$duration • $distance • $locationCount points"
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.logging_notification_title))
+            .setContentText(statsText)
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .build()
+
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun formatDuration(milliseconds: Long): String {
+        val seconds = (milliseconds / MILLIS_PER_SECOND) % SECONDS_PER_MINUTE
+        val minutes = (milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE)) % MINUTES_PER_HOUR
+        val hours = milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR)
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    private fun formatDistance(meters: Float): String {
+        return if (meters >= METERS_PER_KILOMETER) {
+            String.format("%.2f km", meters / METERS_PER_KILOMETER)
+        } else {
+            String.format("%.0f m", meters)
+        }
+    }
+
     companion object {
         private const val CHANNEL_ID = "GPXLoggerChannel"
         private const val NOTIFICATION_ID = 1
+        private const val NOTIFICATION_UPDATE_INTERVAL_MS = 5000L
+        private const val MILLIS_PER_SECOND = 1000L
+        private const val SECONDS_PER_MINUTE = 60
+        private const val MINUTES_PER_HOUR = 60
+        private const val METERS_PER_KILOMETER = 1000
         private const val WAKE_LOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour failsafe timeout
         
         const val ACTION_LOCATION_UPDATE = "com.hdclark.gpxlogger.LOCATION_UPDATE"
