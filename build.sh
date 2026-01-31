@@ -63,7 +63,8 @@ if ! DOCKER_INFO_OUTPUT=$(docker info 2>&1); then
     if echo "$DOCKER_INFO_OUTPUT" | grep -qi "permission denied"; then
         log_error "Docker is installed but you do not have permission to access the Docker daemon."
         log_error "Consider running this script with 'sudo' or adding your user to the 'docker' group:"
-        log_error "  sudo usermod -aG docker \"\$(whoami)\" && newgrp docker"
+        log_error "  sudo usermod -aG docker \"\$(whoami)\""
+        log_error "  (Log out and back in for the group change to take effect)"
     else
         log_error "Failed to communicate with the Docker daemon."
     fi
