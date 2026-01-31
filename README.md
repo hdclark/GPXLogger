@@ -8,6 +8,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 - **Configurable Logging Interval**: Default 10 seconds, user-configurable via settings
 - **Automatic GPX Export**: GPS data is continuously written to GPX files
 - **Battery Optimization**: Data is cached for up to 15 minutes before writing to reduce battery usage
+- **Battery Optimization Workarounds**: Uses WakeLock and prompts users to disable battery optimization for reliable background logging
 - **Real-time Updates**: View current location and logging status in the app
 
 ## Requirements
@@ -15,6 +16,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 - Android 8.0 (API 26) or higher
 - Location permissions
 - Notification permissions (Android 13+)
+- Battery optimization exemption (recommended for reliable background logging)
 
 ## Usage
 
@@ -22,6 +24,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 2. **Stop Logging**: Tap the "Stop Logging" button to stop recording
 3. **Configure Interval**: Access Settings to change the logging frequency (in seconds)
 4. **GPX Files**: Files are automatically saved to the app's external files directory (`Android/data/com.hdclark.gpxlogger/files/Downloads/GPXLogger/`) with timestamp-based filenames (e.g., `20260131-123407.gpx`)
+5. **Battery Optimization**: When prompted, disable battery optimization to ensure the service runs reliably in the background
 
 ## GPX File Format
 
@@ -33,7 +36,29 @@ The app generates standard GPX 1.1 files with the following information:
 
 ## Building
 
-The project uses Gradle for building:
+### Local Build with Docker
+
+For a reproducible build environment that matches CI, use the included build script:
+
+```bash
+./build.sh              # Build debug APK (default)
+./build.sh assembleRelease  # Build release APK
+./build.sh clean        # Clean build artifacts
+```
+
+**Requirements:**
+- Docker installed and running
+- Up-to-date Linux distribution
+
+The build script:
+- Checks for Docker availability
+- Builds the Docker image from the included `Dockerfile`
+- Runs the Gradle build inside the container
+- Reports the APK output location
+
+### Direct Gradle Build
+
+If you have the Android SDK installed locally:
 
 ```bash
 ./gradlew assembleDebug
@@ -63,6 +88,8 @@ The app requires the following permissions:
 - `FOREGROUND_SERVICE_LOCATION`: For location-based foreground service
 - `POST_NOTIFICATIONS`: To display service notification (Android 13+)
 - `WRITE_EXTERNAL_STORAGE`: For writing GPX files (Android 6.0-9.0 only)
+- `WAKE_LOCK`: To keep CPU active during background logging
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: To request battery optimization exemption
 
 ## License
 
