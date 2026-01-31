@@ -3,6 +3,7 @@ package com.hdclark.gpxlogger
 import android.content.Context
 import android.location.Location
 import android.os.Environment
+import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -27,9 +28,13 @@ class GpxManager(private val context: Context) {
             val timestamp = fileNameFormat.format(Date())
             val fileName = "$timestamp.gpx"
             
-            // Store in app-specific external Downloads/GPXLogger directory (scoped-storage compatible)
+            // Get storage path from preferences
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val storagePath = prefs.getString("storage_path", "GPXLogger")?.takeIf { it.isNotBlank() } ?: "GPXLogger"
+            
+            // Store in app-specific external Downloads directory (scoped-storage compatible)
             val baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-            val gpxDir = File(baseDir, "GPXLogger")
+            val gpxDir = File(baseDir, storagePath)
             if (!gpxDir.exists()) {
                 val created = gpxDir.mkdirs()
                 if (!created && !gpxDir.exists()) {

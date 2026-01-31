@@ -25,6 +25,7 @@ class LocationService : Service() {
     private var totalDistance: Float = 0f
     private var lastLocation: Location? = null
     private var lastNotificationUpdate: Long = 0
+    private var lastLocationUpdateTime: Long = 0
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
@@ -128,6 +129,7 @@ class LocationService : Service() {
     private fun handleLocationUpdate(location: Location) {
         try {
             locationCount++
+            lastLocationUpdateTime = System.currentTimeMillis()
 
             // Calculate distance from last location
             lastLocation?.let { last ->
@@ -157,6 +159,9 @@ class LocationService : Service() {
                 putExtra("longitude", location.longitude)
                 putExtra("count", locationCount)
                 putExtra("fileName", gpxManager.getCurrentFileName())
+                putExtra("startTime", startTime)
+                putExtra("totalDistance", totalDistance)
+                putExtra("lastLocationUpdateTime", lastLocationUpdateTime)
             }
             LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
         } catch (e: Exception) {
