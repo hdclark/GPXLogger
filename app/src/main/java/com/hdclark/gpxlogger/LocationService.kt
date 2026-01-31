@@ -101,7 +101,7 @@ class LocationService : Service() {
         
         // Update notification with statistics (throttled to once every 5 seconds)
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastNotificationUpdate >= 5000) {
+        if (currentTime - lastNotificationUpdate >= NOTIFICATION_UPDATE_INTERVAL_MS) {
             updateNotification()
             lastNotificationUpdate = currentTime
         }
@@ -186,15 +186,15 @@ class LocationService : Service() {
     }
 
     private fun formatDuration(milliseconds: Long): String {
-        val seconds = (milliseconds / 1000) % 60
-        val minutes = (milliseconds / (1000 * 60)) % 60
-        val hours = milliseconds / (1000 * 60 * 60)
+        val seconds = (milliseconds / MILLIS_PER_SECOND) % SECONDS_PER_MINUTE
+        val minutes = (milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE)) % SECONDS_PER_MINUTE
+        val hours = milliseconds / (MILLIS_PER_SECOND * SECONDS_PER_MINUTE * SECONDS_PER_MINUTE)
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
 
     private fun formatDistance(meters: Float): String {
-        return if (meters >= 1000) {
-            String.format("%.2f km", meters / 1000)
+        return if (meters >= METERS_PER_KILOMETER) {
+            String.format("%.2f km", meters / METERS_PER_KILOMETER)
         } else {
             String.format("%.0f m", meters)
         }
@@ -203,6 +203,10 @@ class LocationService : Service() {
     companion object {
         private const val CHANNEL_ID = "GPXLoggerChannel"
         private const val NOTIFICATION_ID = 1
+        private const val NOTIFICATION_UPDATE_INTERVAL_MS = 5000L
+        private const val MILLIS_PER_SECOND = 1000L
+        private const val SECONDS_PER_MINUTE = 60
+        private const val METERS_PER_KILOMETER = 1000
         
         const val ACTION_LOCATION_UPDATE = "com.hdclark.gpxlogger.LOCATION_UPDATE"
         const val ACTION_SERVICE_STARTED = "com.hdclark.gpxlogger.SERVICE_STARTED"
