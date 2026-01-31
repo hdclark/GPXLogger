@@ -2,7 +2,7 @@ package com.hdclark.gpxlogger
 
 import android.content.Context
 import android.location.Location
-import android.os.Environment
+import android.os.Build
 import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.FileWriter
@@ -34,9 +34,10 @@ class GpxManager(private val context: Context) {
             val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
             val storagePath = sanitizeFolderName(rawStoragePath)
             
-            // Use the public Downloads directory as the parent location for GPX files
-            // This makes files accessible via standard file browsers
-            val baseDir = getPublicDownloadsDirectory()
+            // Use app-specific external storage which works reliably on all Android versions
+            // On Android 10+ (API 29+), scoped storage restricts direct access to public directories
+            // App-specific external storage is accessible without special permissions
+            val baseDir = getAppExternalStorageDirectory()
             val gpxDir = File(baseDir, storagePath)
             
             // Verify the resolved path is within the base directory to prevent directory traversal
@@ -50,13 +51,6 @@ class GpxManager(private val context: Context) {
             if (!isValidPath) {
                 android.util.Log.e("GpxManager", "Invalid storage path detected, using default")
                 return initializeTrackFile(baseDir, DEFAULT_STORAGE_FOLDER, fileName)
-            }
-            
-            // Validate that the path is publicly accessible
-            if (!isPubliclyAccessible(gpxDir)) {
-                android.util.Log.w("GpxManager", "Storage path is not publicly accessible, using default public Downloads folder")
-                val publicDir = getPublicDownloadsDirectory()
-                return initializeTrackFile(publicDir, DEFAULT_STORAGE_FOLDER, fileName)
             }
             
             initializeTrackFile(baseDir, storagePath, fileName)
@@ -224,42 +218,16 @@ class GpxManager(private val context: Context) {
     }
     
     /**
-     * Gets the public Downloads directory for storing GPX files.
-     * This makes files accessible via standard file browsers.
+     * Gets the app-specific external storage directory for storing GPX files.
+     * This directory is accessible without special permissions on all Android versions.
+     * On Android 10+ (API 29+), this is the recommended approach as scoped storage
+     * restricts direct access to public directories.
+     * 
+     * Files stored here can still be accessed via file managers that support
+     * browsing app-specific directories (e.g., at Android/data/com.hdclark.gpxlogger/files/).
      */
-    private fun getPublicDownloadsDirectory(): File {
-        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    }
-    
-    /**
-     * Checks if a directory path is publicly accessible (can be read by external apps/file browsers).
-     * A path is considered publicly accessible if it's within the public external storage area.
-     */
-    private fun isPubliclyAccessible(directory: File): Boolean {
-        return try {
-            val publicStorageRoot = Environment.getExternalStorageDirectory()
-            val appPrivateDir = context.getExternalFilesDir(null)
-            val canonicalPath = directory.canonicalPath
-            
-            // Must be within public external storage
-            val isInPublicStorage = canonicalPath.startsWith(publicStorageRoot.canonicalPath)
-            
-            // Must NOT be within app-private directories (Android/data/package.name/)
-            // Use parentFile traversal to get the app's package-specific directory
-            val isNotInPrivateDir = if (appPrivateDir != null) {
-                // appPrivateDir is typically Android/data/package.name/files
-                // parentFile gives us Android/data/package.name
-                val appDataDir = appPrivateDir.parentFile
-                appDataDir == null || !canonicalPath.startsWith(appDataDir.canonicalPath)
-            } else {
-                true
-            }
-            
-            isInPublicStorage && isNotInPrivateDir
-        } catch (e: IOException) {
-            android.util.Log.e("GpxManager", "Error checking path accessibility", e)
-            false
-        }
+    private fun getAppExternalStorageDirectory(): File {
+        return context.getExternalFilesDir(null) ?: context.filesDir
     }
     
     /**
@@ -271,7 +239,7 @@ class GpxManager(private val context: Context) {
         val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
         val storagePath = sanitizeFolderName(rawStoragePath)
         
-        val baseDir = getPublicDownloadsDirectory()
+        val baseDir = getAppExternalStorageDirectory()
         return File(baseDir, storagePath)
     }
     
@@ -279,27 +247,39 @@ class GpxManager(private val context: Context) {
      * Returns the full path where GPX files would be stored for a given folder name.
      * This can be used to preview the path before saving settings.
      */
-    fun getStorageDirectoryForFolder(folderName: String): File {
-        val storagePath = sanitizeFolderName(folderName.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER)
-        val baseDir = getPublicDownloadsDirectory()
+    fun getStorageDirectoryForFolder(folderName: String?): File {
+        val storagePath = sanitizeFolderName(folderName?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER)
+        val baseDir = getAppExternalStorageDirectory()
         return File(baseDir, storagePath)
     }
     
     /**
-     * Validates if the current storage configuration is publicly accessible.
-     * Returns true if GPX files will be accessible by external file browsers.
+     * Returns information about the storage location accessibility.
+     * On Android 10+ (API 29+), app-specific external storage may have limited visibility
+     * in some file browsers due to scoped storage restrictions.
      */
-    fun isStorageLocationPubliclyAccessible(): Boolean {
-        return isPubliclyAccessible(getStorageDirectory())
+    fun getStorageAccessibilityInfo(): StorageAccessibilityInfo {
+        val directory = getStorageDirectory()
+        // On Android 9 (API 28) and below, files are directly accessible by all file manager apps
+        // On Android 10+ (API 29+), scoped storage restricts access to app-specific directories
+        val hasDirectFileAccess = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+        
+        return StorageAccessibilityInfo(
+            fullPath = directory.absolutePath,
+            isFullyAccessible = hasDirectFileAccess,
+            message = if (hasDirectFileAccess) {
+                "Files are accessible via standard file manager apps"
+            } else {
+                "Files are stored in app-specific storage. Access via file manager at: Android/data/${context.packageName}/files/"
+            }
+        )
     }
     
-    /**
-     * Validates if a proposed folder name would result in a publicly accessible path.
-     * This allows validation without modifying SharedPreferences.
-     */
-    fun isStorageLocationPubliclyAccessibleForFolder(folderName: String): Boolean {
-        return isPubliclyAccessible(getStorageDirectoryForFolder(folderName))
-    }
+    data class StorageAccessibilityInfo(
+        val fullPath: String,
+        val isFullyAccessible: Boolean,
+        val message: String
+    )
     
     companion object {
         private const val DEFAULT_STORAGE_FOLDER = "GPXLogger"

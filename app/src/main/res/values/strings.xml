@@ -25,8 +25,6 @@
     <string name="storage_path_title">Storage Folder Name</string>
     <string name="storage_path_summary">Folder for GPX files (leave empty for default)</string>
     <string name="storage_path_full_summary">Full path: %1$s\n%2$s</string>
-    <string name="storage_path_accessible">✓ Accessible by file browsers</string>
-    <string name="storage_path_not_accessible">✗ Not accessible by file browsers. Choose a public location.</string>
     <string name="storage_path_default">GPXLogger</string>
     <string name="battery_optimization_title">Battery Optimization</string>
     <string name="battery_optimization_message">For reliable GPS logging, please disable battery optimization for this app. This prevents the system from stopping the GPS service.</string>
