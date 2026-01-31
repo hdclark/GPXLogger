@@ -21,7 +21,7 @@ A GPS logger app for Android that exports GPS traces in GPX format.
 1. **Start Logging**: Tap the "Start Logging" button to begin recording GPS positions
 2. **Stop Logging**: Tap the "Stop Logging" button to stop recording
 3. **Configure Interval**: Access Settings to change the logging frequency (in seconds)
-4. **GPX Files**: Files are automatically saved to `Downloads/GPXLogger/` with timestamp-based filenames (e.g., `20260131-123407.gpx`)
+4. **GPX Files**: Files are automatically saved to the app's external files directory (`Android/data/com.hdclark.gpxlogger/files/Downloads/GPXLogger/`) with timestamp-based filenames (e.g., `20260131-123407.gpx`)
 
 ## GPX File Format
 
@@ -62,6 +62,7 @@ The app requires the following permissions:
 - `FOREGROUND_SERVICE`: To run background service
 - `FOREGROUND_SERVICE_LOCATION`: For location-based foreground service
 - `POST_NOTIFICATIONS`: To display service notification (Android 13+)
+- `WRITE_EXTERNAL_STORAGE`: For writing GPX files (Android 6.0-9.0 only)
 
 ## License
 
