@@ -13,9 +13,7 @@
     <EditTextPreference
         android:key="storage_path"
         android:title="@string/storage_path_title"
-        android:summary="@string/storage_path_summary"
         android:defaultValue="GPXLogger"
-        android:inputType="text"
-        app:useSimpleSummaryProvider="true" />
+        android:inputType="text" />
 
 </PreferenceScreen>

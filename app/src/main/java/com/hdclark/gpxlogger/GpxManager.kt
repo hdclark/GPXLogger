@@ -1,8 +1,12 @@
 package com.hdclark.gpxlogger
 
+import android.content.ContentValues
 import android.content.Context
 import android.location.Location
+import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.FileWriter
@@ -11,7 +15,12 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class GpxManager(private val context: Context) {
+    // For API 29+ we use MediaStore and track the URI
+    private var currentUri: Uri? = null
+    // For API 28 and below we use direct File I/O
     private var currentFile: File? = null
+    private var currentFileName: String? = null
+    
     private var locationCache = mutableListOf<Location>()
     private var lastFlushTime = System.currentTimeMillis()
     private var consecutiveFlushFailures = 0
@@ -22,6 +31,18 @@ class GpxManager(private val context: Context) {
     }
     
     private val fileNameFormat = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+    
+    private fun generateGpxHeader(): String {
+        return """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPXLogger"
+  xmlns="http://www.topografix.com/GPX/1/1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <trk>
+    <name>GPS Track ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}</name>
+    <trkseg>
+"""
+    }
     
     @Synchronized
     fun startNewTrack(): File? {
@@ -34,24 +55,14 @@ class GpxManager(private val context: Context) {
             val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
             val storagePath = sanitizeFolderName(rawStoragePath)
             
-            // Store in app-specific external Downloads directory (scoped-storage compatible)
-            val baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-            val gpxDir = File(baseDir, storagePath)
-            
-            // Verify the resolved path is within the base directory to prevent directory traversal
-            val isValidPath = try {
-                gpxDir.canonicalPath.startsWith(baseDir.canonicalPath)
-            } catch (e: IOException) {
-                android.util.Log.e("GpxManager", "Error resolving canonical path, using default", e)
-                false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Use MediaStore API for Android 10+ to write to public Downloads
+                initializeTrackWithMediaStore(storagePath, fileName)
+            } else {
+                // Use direct File I/O for Android 9 and below
+                val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                initializeTrackWithFileIO(baseDir, storagePath, fileName)
             }
-            
-            if (!isValidPath) {
-                android.util.Log.e("GpxManager", "Invalid storage path detected, using default")
-                return initializeTrackFile(baseDir, DEFAULT_STORAGE_FOLDER, fileName)
-            }
-            
-            initializeTrackFile(baseDir, storagePath, fileName)
         } catch (e: Exception) {
             android.util.Log.e("GpxManager", "Error starting new track", e)
             null
@@ -59,33 +70,73 @@ class GpxManager(private val context: Context) {
     }
     
     /**
-     * Common helper method to initialize a track file with GPX header.
-     * Eliminates code duplication between startNewTrack and fallback path.
+     * Initialize a track file using MediaStore API for Android 10+ (API 29+).
+     * This allows writing to the public Downloads directory without special permissions.
      */
-    private fun initializeTrackFile(baseDir: File, folderName: String, fileName: String): File? {
+    private fun initializeTrackWithMediaStore(folderName: String, fileName: String): File? {
+        val relativePath = "${Environment.DIRECTORY_DOWNLOADS}/$folderName"
+        
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(MediaStore.Downloads.MIME_TYPE, "application/gpx+xml")
+            put(MediaStore.Downloads.RELATIVE_PATH, relativePath)
+            // Mark as pending while we're writing
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            ?: throw IOException("Failed to create MediaStore entry for GPX file")
+        
+        // Write GPX header
+        resolver.openOutputStream(uri, "w")?.use { outputStream ->
+            outputStream.write(generateGpxHeader().toByteArray(Charsets.UTF_8))
+        } ?: throw IOException("Failed to open output stream for GPX file")
+        
+        currentUri = uri
+        currentFile = null
+        currentFileName = fileName
+        locationCache.clear()
+        lastFlushTime = System.currentTimeMillis()
+        consecutiveFlushFailures = 0
+        
+        // Return a placeholder File for compatibility (actual path may not be accessible)
+        return File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "$folderName/$fileName")
+    }
+    
+    /**
+     * Initialize a track file using direct File I/O for Android 9 and below (API 26-28).
+     */
+    private fun initializeTrackWithFileIO(baseDir: File, folderName: String, fileName: String): File? {
         val gpxDir = File(baseDir, folderName)
-        if (!gpxDir.exists()) {
-            val created = gpxDir.mkdirs()
-            if (!created && !gpxDir.exists()) {
-                throw IllegalStateException("Failed to create GPX directory: ${gpxDir.absolutePath}")
+        
+        // Verify the resolved path is within the base directory to prevent directory traversal
+        val isValidPath = try {
+            gpxDir.canonicalPath.startsWith(baseDir.canonicalPath)
+        } catch (e: IOException) {
+            android.util.Log.e("GpxManager", "Error resolving canonical path, using default", e)
+            false
+        }
+        
+        val targetDir = if (isValidPath) gpxDir else File(baseDir, DEFAULT_STORAGE_FOLDER)
+        
+        if (!targetDir.exists()) {
+            val created = targetDir.mkdirs()
+            if (!created && !targetDir.exists()) {
+                throw IllegalStateException("Failed to create GPX directory: ${targetDir.absolutePath}")
             }
         }
-        val file = File(gpxDir, fileName)
+        
+        val file = File(targetDir, fileName)
         
         // Write GPX header
         FileWriter(file, false).use { writer ->
-            writer.write("""<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="GPXLogger"
-  xmlns="http://www.topografix.com/GPX/1/1"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
-  <trk>
-    <name>GPS Track ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}</name>
-    <trkseg>
-""")
+            writer.write(generateGpxHeader())
         }
         
         currentFile = file
+        currentUri = null
+        currentFileName = fileName
         locationCache.clear()
         lastFlushTime = System.currentTimeMillis()
         consecutiveFlushFailures = 0
@@ -117,7 +168,8 @@ class GpxManager(private val context: Context) {
     
     @Synchronized
     private fun flushCacheInternal(forceFlush: Boolean): Boolean {
-        val file = currentFile ?: return false
+        // Check if we have a valid target (either URI or File)
+        if (currentUri == null && currentFile == null) return false
         if (locationCache.isEmpty()) return true
         
         // Skip flush if retry limit exceeded (unless forced for emergency/close)
@@ -126,15 +178,18 @@ class GpxManager(private val context: Context) {
         }
         
         return try {
-            FileWriter(file, true).use { writer ->
-                for (location in locationCache) {
-                    val timestamp = dateFormat.format(Date(location.time))
-                    writer.write("""      <trkpt lat="${location.latitude}" lon="${location.longitude}">
-        <ele>${location.altitude}</ele>
-        <time>$timestamp</time>
-      </trkpt>
-""")
+            val trackPoints = buildTrackPointsXml()
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && currentUri != null) {
+                // Use MediaStore for Android 10+
+                appendToMediaStoreFile(trackPoints)
+            } else if (currentFile != null) {
+                // Use direct File I/O for Android 9 and below
+                FileWriter(currentFile, true).use { writer ->
+                    writer.write(trackPoints)
                 }
+            } else {
+                return false
             }
             
             locationCache.clear()
@@ -149,26 +204,55 @@ class GpxManager(private val context: Context) {
         }
     }
     
+    private fun buildTrackPointsXml(): String {
+        val sb = StringBuilder()
+        for (location in locationCache) {
+            val timestamp = dateFormat.format(Date(location.time))
+            sb.append("""      <trkpt lat="${location.latitude}" lon="${location.longitude}">
+        <ele>${location.altitude}</ele>
+        <time>$timestamp</time>
+      </trkpt>
+""")
+        }
+        return sb.toString()
+    }
+    
+    private fun appendToMediaStoreFile(content: String) {
+        val uri = currentUri ?: return
+        // Open in append mode
+        context.contentResolver.openOutputStream(uri, "wa")?.use { outputStream ->
+            outputStream.write(content.toByteArray(Charsets.UTF_8))
+        } ?: throw IOException("Failed to open output stream for appending")
+    }
+    
     @Synchronized
     fun closeTrack() {
         // Flush any remaining cached locations - force flush even if retry limit exceeded
         flushCacheInternal(forceFlush = true)
         
-        val file = currentFile ?: return
-        
         try {
-            // Write GPX footer
-            FileWriter(file, true).use { writer ->
-                writer.write("""    </trkseg>
-  </trk>
-</gpx>
-""")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && currentUri != null) {
+                // Append footer and mark file as complete for MediaStore
+                appendToMediaStoreFile(GPX_FOOTER)
+                
+                // Mark file as no longer pending
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.Downloads.IS_PENDING, 0)
+                }
+                context.contentResolver.update(currentUri!!, contentValues, null, null)
+            } else if (currentFile != null) {
+                // Write footer using direct File I/O
+                FileWriter(currentFile, true).use { writer ->
+                    writer.write(GPX_FOOTER)
+                }
             }
         } catch (e: Exception) {
             android.util.Log.e("GpxManager", "Error writing GPX footer", e)
         }
         
+        currentUri = null
         currentFile = null
+        currentFileName = null
     }
     
     /**
@@ -193,7 +277,7 @@ class GpxManager(private val context: Context) {
     
     @Synchronized
     fun getCurrentFileName(): String {
-        return currentFile?.name ?: ""
+        return currentFileName ?: ""
     }
     
     /**
@@ -215,7 +299,54 @@ class GpxManager(private val context: Context) {
         return sanitized.takeIf { it.isNotBlank() && it.any { c -> c != '_' } } ?: DEFAULT_STORAGE_FOLDER
     }
     
+    /**
+     * Returns the full path where GPX files will be stored.
+     * This can be used to display the path in settings.
+     */
+    fun getStorageDirectory(): File {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
+        val storagePath = sanitizeFolderName(rawStoragePath)
+        
+        val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        return File(baseDir, storagePath)
+    }
+    
+    /**
+     * Returns the full path where GPX files would be stored for a given folder name.
+     * This can be used to preview the path before saving settings.
+     */
+    fun getStorageDirectoryForFolder(folderName: String?): File {
+        val storagePath = sanitizeFolderName(folderName?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER)
+        val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        return File(baseDir, storagePath)
+    }
+    
+    /**
+     * Returns information about the storage location accessibility.
+     * Files are stored in the public Downloads directory and are accessible via file browsers.
+     */
+    fun getStorageAccessibilityInfo(): StorageAccessibilityInfo {
+        val directory = getStorageDirectory()
+        
+        return StorageAccessibilityInfo(
+            fullPath = directory.absolutePath,
+            isFullyAccessible = true,
+            message = "Files are saved to the public Downloads folder and accessible via file browsers"
+        )
+    }
+    
+    data class StorageAccessibilityInfo(
+        val fullPath: String,
+        val isFullyAccessible: Boolean,
+        val message: String
+    )
+    
     companion object {
         private const val DEFAULT_STORAGE_FOLDER = "GPXLogger"
+        private const val GPX_FOOTER = """    </trkseg>
+  </trk>
+</gpx>
+"""
     }
 }
