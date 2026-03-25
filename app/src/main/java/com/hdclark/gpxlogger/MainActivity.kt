@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -33,8 +34,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lastUpdateText: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+    private lateinit var sliceButton: Button
     private lateinit var settingsButton: Button
+    private lateinit var storageWarningText: TextView
     private var batteryDialogShownThisSession = false
+    private var pendingSliceReceiver: BroadcastReceiver? = null
     
     // Statistics tracking - stored in companion object to survive activity recreation
     // Handler for periodic UI updates
@@ -88,7 +92,9 @@ class MainActivity : AppCompatActivity() {
         lastUpdateText = findViewById(R.id.lastUpdateText)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
+        sliceButton = findViewById(R.id.sliceButton)
         settingsButton = findViewById(R.id.settingsButton)
+        storageWarningText = findViewById(R.id.storageWarningText)
 
         startButton.setOnClickListener {
             if (checkPermissions()) {
@@ -99,6 +105,31 @@ class MainActivity : AppCompatActivity() {
         }
 
         stopButton.setOnClickListener {
+            cancelPendingSliceRestart()
+            stopLocationService()
+        }
+
+        sliceButton.setOnClickListener {
+            sliceButton.isEnabled = false
+            cancelPendingSliceRestart()
+            val restartReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action == LocationService.ACTION_SERVICE_STOPPED) {
+                        LocalBroadcastManager.getInstance(this@MainActivity).unregisterReceiver(this)
+                        pendingSliceReceiver = null
+                        if (checkPermissions()) {
+                            startLocationService()
+                        } else {
+                            requestPermissions()
+                        }
+                    }
+                }
+            }
+            pendingSliceReceiver = restartReceiver
+            LocalBroadcastManager.getInstance(this).registerReceiver(
+                restartReceiver,
+                IntentFilter(LocationService.ACTION_SERVICE_STOPPED)
+            )
             stopLocationService()
         }
 
@@ -125,6 +156,30 @@ class MainActivity : AppCompatActivity() {
 
         // Check battery optimization status
         checkBatteryOptimization()
+        
+        // Check storage accessibility and show warning if needed
+        checkStorageAccessibility()
+    }
+    
+    private fun cancelPendingSliceRestart() {
+        pendingSliceReceiver?.let {
+            try {
+                LocalBroadcastManager.getInstance(this).unregisterReceiver(it)
+            } catch (e: IllegalArgumentException) {
+                // Receiver was already unregistered
+            }
+            pendingSliceReceiver = null
+        }
+    }
+    
+    private fun checkStorageAccessibility() {
+        val gpxManager = GpxManager(this)
+        val accessInfo = gpxManager.getStorageAccessibilityInfo()
+        if (!accessInfo.isFullyAccessible) {
+            storageWarningText.visibility = View.VISIBLE
+        } else {
+            storageWarningText.visibility = View.GONE
+        }
     }
 
     private fun checkBatteryOptimization() {
@@ -186,6 +241,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(updateRunnable)
+        cancelPendingSliceRestart()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(locationUpdateReceiver)
     }
 
@@ -270,6 +326,7 @@ class MainActivity : AppCompatActivity() {
         statusText.text = if (isRunning) getString(R.string.status_running) else getString(R.string.status_stopped)
         startButton.isEnabled = !isRunning
         stopButton.isEnabled = isRunning
+        sliceButton.isEnabled = isRunning
         
         if (isRunning) {
             // Start periodic updates
