@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lastUpdateText: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+    private lateinit var sliceButton: Button
     private lateinit var settingsButton: Button
     private var batteryDialogShownThisSession = false
     
@@ -88,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         lastUpdateText = findViewById(R.id.lastUpdateText)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
+        sliceButton = findViewById(R.id.sliceButton)
         settingsButton = findViewById(R.id.settingsButton)
 
         startButton.setOnClickListener {
@@ -100,6 +102,16 @@ class MainActivity : AppCompatActivity() {
 
         stopButton.setOnClickListener {
             stopLocationService()
+        }
+
+        sliceButton.setOnClickListener {
+            stopLocationService()
+            // Brief delay to allow the service to fully stop before restarting
+            handler.postDelayed({
+                if (checkPermissions()) {
+                    startLocationService()
+                }
+            }, SLICE_RESTART_DELAY_MS)
         }
 
         settingsButton.setOnClickListener {
@@ -270,6 +282,7 @@ class MainActivity : AppCompatActivity() {
         statusText.text = if (isRunning) getString(R.string.status_running) else getString(R.string.status_stopped)
         startButton.isEnabled = !isRunning
         stopButton.isEnabled = isRunning
+        sliceButton.isEnabled = isRunning
         
         if (isRunning) {
             // Start periodic updates
@@ -317,6 +330,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_BATTERY_DIALOG_DISMISSED = "battery_dialog_dismissed"
         private const val UI_UPDATE_INTERVAL_MS = 1000L
         private const val MILLIS_PER_SECOND = 1000L
+        private const val SLICE_RESTART_DELAY_MS = 500L
         
         // Statistics cached at companion object level to survive activity recreation
         // @Volatile ensures visibility across threads (UI thread and broadcast receiver)
