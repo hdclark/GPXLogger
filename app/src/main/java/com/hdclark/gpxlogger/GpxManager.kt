@@ -47,9 +47,8 @@ class GpxManager(private val context: Context) {
             val rawStoragePath = prefs.getString("storage_path", DEFAULT_STORAGE_FOLDER)?.takeIf { it.isNotBlank() } ?: DEFAULT_STORAGE_FOLDER
             val storagePath = sanitizeFolderName(rawStoragePath)
             
-            // Use the app's external media directory, which is publicly accessible
-            // to other apps (e.g., file browsers, Termux, syncing apps) without
-            // requiring special permissions.
+            // Prefer the app's external media directory, which is generally accessible
+            // to other apps (e.g., file browsers, Termux, syncing apps).
             val baseDir = getMediaBaseDirectory()
             initializeTrackWithFileIO(baseDir, storagePath, fileName)
         } catch (e: Exception) {
@@ -59,9 +58,9 @@ class GpxManager(private val context: Context) {
     }
     
     /**
-     * Returns the app's external media directory.
-     * Path: /storage/emulated/0/Android/media/<package_name>/
-     * This directory is accessible to other apps without special permissions.
+     * Returns the preferred storage directory. Prefers the external media directory
+     * (Android/media/<package_name>/) which is generally accessible to other apps,
+     * but may fall back to app-private storage if the media directory is unavailable.
      */
     private fun getMediaBaseDirectory(): File {
         val mediaDirs = context.externalMediaDirs
@@ -146,8 +145,9 @@ class GpxManager(private val context: Context) {
         
         return try {
             val trackPoints = buildTrackPointsXml()
+            val file = currentFile ?: return false
             
-            FileWriter(currentFile, true).use { writer ->
+            FileWriter(file, true).use { writer ->
                 writer.write(trackPoints)
             }
             
@@ -265,16 +265,29 @@ class GpxManager(private val context: Context) {
     
     /**
      * Returns information about the storage location accessibility.
-     * Files are stored in the app's external media directory and are accessible to other apps.
+     * Checks whether the resolved base directory is the external media directory
+     * (accessible to other apps) or a fallback app-private directory.
      */
     fun getStorageAccessibilityInfo(): StorageAccessibilityInfo {
         val directory = getStorageDirectory()
+        val baseDir = getMediaBaseDirectory()
+        val mediaDirs = context.externalMediaDirs
+        val isMediaDir = mediaDirs.isNotEmpty() && mediaDirs[0] != null &&
+            baseDir.absolutePath == mediaDirs[0].absolutePath
         
-        return StorageAccessibilityInfo(
-            fullPath = directory.absolutePath,
-            isFullyAccessible = true,
-            message = "Files are saved to the Android/media/ directory and accessible to other apps"
-        )
+        return if (isMediaDir) {
+            StorageAccessibilityInfo(
+                fullPath = directory.absolutePath,
+                isFullyAccessible = true,
+                message = "Files are saved to the Android/media/ directory and accessible to other apps"
+            )
+        } else {
+            StorageAccessibilityInfo(
+                fullPath = directory.absolutePath,
+                isFullyAccessible = false,
+                message = "Warning: files are in app-private storage and may not be accessible to other apps"
+            )
+        }
     }
     
     data class StorageAccessibilityInfo(

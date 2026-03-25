@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -35,7 +36,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var stopButton: Button
     private lateinit var sliceButton: Button
     private lateinit var settingsButton: Button
+    private lateinit var storageWarningText: TextView
     private var batteryDialogShownThisSession = false
+    private var pendingSliceReceiver: BroadcastReceiver? = null
     
     // Statistics tracking - stored in companion object to survive activity recreation
     // Handler for periodic UI updates
@@ -91,6 +94,7 @@ class MainActivity : AppCompatActivity() {
         stopButton = findViewById(R.id.stopButton)
         sliceButton = findViewById(R.id.sliceButton)
         settingsButton = findViewById(R.id.settingsButton)
+        storageWarningText = findViewById(R.id.storageWarningText)
 
         startButton.setOnClickListener {
             if (checkPermissions()) {
@@ -101,15 +105,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         stopButton.setOnClickListener {
+            cancelPendingSliceRestart()
             stopLocationService()
         }
 
         sliceButton.setOnClickListener {
-            // Wait for the service to report that it has fully stopped before restarting
+            sliceButton.isEnabled = false
+            cancelPendingSliceRestart()
             val restartReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     if (intent?.action == LocationService.ACTION_SERVICE_STOPPED) {
                         LocalBroadcastManager.getInstance(this@MainActivity).unregisterReceiver(this)
+                        pendingSliceReceiver = null
                         if (checkPermissions()) {
                             startLocationService()
                         } else {
@@ -118,6 +125,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+            pendingSliceReceiver = restartReceiver
             LocalBroadcastManager.getInstance(this).registerReceiver(
                 restartReceiver,
                 IntentFilter(LocationService.ACTION_SERVICE_STOPPED)
@@ -148,6 +156,30 @@ class MainActivity : AppCompatActivity() {
 
         // Check battery optimization status
         checkBatteryOptimization()
+        
+        // Check storage accessibility and show warning if needed
+        checkStorageAccessibility()
+    }
+    
+    private fun cancelPendingSliceRestart() {
+        pendingSliceReceiver?.let {
+            try {
+                LocalBroadcastManager.getInstance(this).unregisterReceiver(it)
+            } catch (e: IllegalArgumentException) {
+                // Receiver was already unregistered
+            }
+            pendingSliceReceiver = null
+        }
+    }
+    
+    private fun checkStorageAccessibility() {
+        val gpxManager = GpxManager(this)
+        val accessInfo = gpxManager.getStorageAccessibilityInfo()
+        if (!accessInfo.isFullyAccessible) {
+            storageWarningText.visibility = View.VISIBLE
+        } else {
+            storageWarningText.visibility = View.GONE
+        }
     }
 
     private fun checkBatteryOptimization() {
@@ -209,6 +241,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(updateRunnable)
+        cancelPendingSliceRestart()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(locationUpdateReceiver)
     }
 
@@ -341,7 +374,6 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_BATTERY_DIALOG_DISMISSED = "battery_dialog_dismissed"
         private const val UI_UPDATE_INTERVAL_MS = 1000L
         private const val MILLIS_PER_SECOND = 1000L
-        private const val SLICE_RESTART_DELAY_MS = 500L
         
         // Statistics cached at companion object level to survive activity recreation
         // @Volatile ensures visibility across threads (UI thread and broadcast receiver)
