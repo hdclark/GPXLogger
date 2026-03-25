@@ -271,9 +271,8 @@ class GpxManager(private val context: Context) {
     fun getStorageAccessibilityInfo(): StorageAccessibilityInfo {
         val directory = getStorageDirectory()
         val baseDir = getMediaBaseDirectory()
-        val mediaDirs = context.externalMediaDirs
-        val isMediaDir = mediaDirs.isNotEmpty() && mediaDirs[0] != null &&
-            baseDir.absolutePath == mediaDirs[0].absolutePath
+        val mediaDir = context.externalMediaDirs.firstOrNull()
+        val isMediaDir = mediaDir != null && baseDir.absolutePath == mediaDir.absolutePath
         
         return if (isMediaDir) {
             StorageAccessibilityInfo(
