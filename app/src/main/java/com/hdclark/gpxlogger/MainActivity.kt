@@ -105,15 +105,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         sliceButton.setOnClickListener {
-            stopLocationService()
-            // Brief delay to allow the service to fully stop before restarting
-            handler.postDelayed({
-                if (checkPermissions()) {
-                    startLocationService()
-                } else {
-                    requestPermissions()
+            // Wait for the service to report that it has fully stopped before restarting
+            val restartReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action == LocationService.ACTION_SERVICE_STOPPED) {
+                        LocalBroadcastManager.getInstance(this@MainActivity).unregisterReceiver(this)
+                        if (checkPermissions()) {
+                            startLocationService()
+                        } else {
+                            requestPermissions()
+                        }
+                    }
                 }
-            }, SLICE_RESTART_DELAY_MS)
+            }
+            LocalBroadcastManager.getInstance(this).registerReceiver(
+                restartReceiver,
+                IntentFilter(LocationService.ACTION_SERVICE_STOPPED)
+            )
+            stopLocationService()
         }
 
         settingsButton.setOnClickListener {
