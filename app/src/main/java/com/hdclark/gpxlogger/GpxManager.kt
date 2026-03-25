@@ -69,6 +69,7 @@ class GpxManager(private val context: Context) {
             return mediaDirs[0]
         }
         // Fallback (should not normally occur on API 26+)
+        android.util.Log.w("GpxManager", "externalMediaDirs unavailable, falling back to app-private storage")
         return context.getExternalFilesDir(null) ?: context.filesDir
     }
     
@@ -271,7 +272,7 @@ class GpxManager(private val context: Context) {
         return StorageAccessibilityInfo(
             fullPath = directory.absolutePath,
             isFullyAccessible = true,
-            message = "Files are saved to the media directory and accessible to other apps"
+            message = "Files are saved to the Android/media/ directory and accessible to other apps"
         )
     }
     

@@ -110,6 +110,8 @@ class MainActivity : AppCompatActivity() {
             handler.postDelayed({
                 if (checkPermissions()) {
                     startLocationService()
+                } else {
+                    requestPermissions()
                 }
             }, SLICE_RESTART_DELAY_MS)
         }
