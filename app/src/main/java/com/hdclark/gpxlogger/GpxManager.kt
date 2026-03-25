@@ -182,8 +182,9 @@ class GpxManager(private val context: Context) {
         flushCacheInternal(forceFlush = true)
         
         try {
-            if (currentFile != null) {
-                FileWriter(currentFile, true).use { writer ->
+            val file = currentFile
+            if (file != null) {
+                FileWriter(file, true).use { writer ->
                     writer.write(GPX_FOOTER)
                 }
             }
