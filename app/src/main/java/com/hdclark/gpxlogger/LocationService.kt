@@ -47,6 +47,11 @@ class LocationService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         
+        if (intent?.action == ACTION_SLICE_LOG && isRunning) {
+            sliceCurrentTrack()
+            return START_STICKY
+        }
+        
         // Acquire wake lock to prevent CPU from sleeping
         acquireWakeLock()
         
@@ -123,6 +128,29 @@ class LocationService : Service() {
         } catch (e: SecurityException) {
             // Permission not granted
             stopSelf()
+        }
+    }
+
+    private fun sliceCurrentTrack() {
+        try {
+            gpxManager.closeTrack()
+            val file = gpxManager.startNewTrack()
+            if (file == null) {
+                android.util.Log.e("LocationService", "Failed to create GPX file while slicing, stopping service")
+                handleFatalError()
+                return
+            }
+            
+            locationCount = 0
+            startTime = System.currentTimeMillis()
+            totalDistance = 0f
+            lastLocation = null
+            lastNotificationUpdate = 0
+            lastLocationUpdateTime = 0
+            updateNotification()
+        } catch (e: Exception) {
+            android.util.Log.e("LocationService", "Error slicing GPX track", e)
+            handleFatalError()
         }
     }
 
@@ -236,6 +264,18 @@ class LocationService : Service() {
         }
     }
 
+    private fun createSlicePendingIntent(): PendingIntent {
+        val sliceIntent = Intent(this, LocationService::class.java).apply {
+            action = ACTION_SLICE_LOG
+        }
+        return PendingIntent.getService(
+            this,
+            SLICE_PENDING_INTENT_REQUEST_CODE,
+            sliceIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
     private fun createNotification(): android.app.Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
@@ -248,6 +288,7 @@ class LocationService : Service() {
             .setContentText(getString(R.string.logging_notification_text))
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
+            .addAction(android.R.drawable.ic_menu_crop, getString(R.string.slice_log), createSlicePendingIntent())
             .setOngoing(true)
             .build()
     }
@@ -268,6 +309,7 @@ class LocationService : Service() {
             .setContentText(statsText)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
+            .addAction(0, getString(R.string.slice_log), createSlicePendingIntent())
             .setOngoing(true)
             .build()
 
@@ -280,6 +322,8 @@ class LocationService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val NOTIFICATION_UPDATE_INTERVAL_MS = 5000L
         private const val WAKE_LOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour failsafe timeout
+        private const val SLICE_PENDING_INTENT_REQUEST_CODE = 1
+        private const val ACTION_SLICE_LOG = "com.hdclark.gpxlogger.SLICE_LOG"
         
         const val ACTION_LOCATION_UPDATE = "com.hdclark.gpxlogger.LOCATION_UPDATE"
         const val ACTION_SERVICE_STARTED = "com.hdclark.gpxlogger.SERVICE_STARTED"
