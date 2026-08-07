@@ -40,7 +40,7 @@ class GpxManager(private val context: Context) {
     fun startNewTrack(): File? {
         return try {
             val timestamp = fileNameFormat.format(Date())
-            val fileName = "$timestamp.gpx"
+            val fileName = "$timestamp$WIP_SUFFIX.gpx"
             
             // Get storage path from preferences and sanitize it
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -181,8 +181,8 @@ class GpxManager(private val context: Context) {
         // Flush any remaining cached locations - force flush even if retry limit exceeded
         flushCacheInternal(forceFlush = true)
         
+        val file = currentFile
         try {
-            val file = currentFile
             if (file != null) {
                 FileWriter(file, true).use { writer ->
                     writer.write(GPX_FOOTER)
@@ -192,8 +192,28 @@ class GpxManager(private val context: Context) {
             android.util.Log.e("GpxManager", "Error writing GPX footer", e)
         }
         
+        if (file != null) {
+            finalizeTrackFile(file)
+        }
+        
         currentFile = null
         currentFileName = null
+    }
+    
+    private fun finalizeTrackFile(file: File) {
+        val wipFileSuffix = "$WIP_SUFFIX.gpx"
+        if (!file.name.endsWith(wipFileSuffix)) {
+            return
+        }
+        
+        val finalizedName = file.name.removeSuffix(wipFileSuffix) + ".gpx"
+        val finalizedFile = File(file.parentFile, finalizedName)
+        if (!file.renameTo(finalizedFile)) {
+            android.util.Log.e(
+                "GpxManager",
+                "Failed to finalize GPX file: ${file.absolutePath} -> ${finalizedFile.absolutePath}"
+            )
+        }
     }
     
     /**
@@ -297,6 +317,7 @@ class GpxManager(private val context: Context) {
     
     companion object {
         private const val DEFAULT_STORAGE_FOLDER = "GPXLogger"
+        private const val WIP_SUFFIX = "_wip"
         private const val GPX_FOOTER = """    </trkseg>
   </trk>
 </gpx>
