@@ -288,7 +288,7 @@ class LocationService : Service() {
             .setContentText(getString(R.string.logging_notification_text))
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
-            .addAction(0, getString(R.string.slice_log), createSlicePendingIntent())
+            .addAction(android.R.drawable.ic_menu_crop, getString(R.string.slice_log), createSlicePendingIntent())
             .setOngoing(true)
             .build()
     }
